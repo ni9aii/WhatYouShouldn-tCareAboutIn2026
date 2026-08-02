@@ -33,27 +33,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _guard = TerminalGuard::enter()?;
     let backend = CrosstermBackend::new(stdout());
     let mut terminal = Terminal::new(backend)?;
-    let mut state = GameState::default();
+    loop {
+        execute!(stdout(), EnterAlternateScreen)?;
+        terminal.draw(|frame| {
+            let area = frame.area();
+            let text = ratatui::widgets::Paragraph::new(
+                "WHAT YOU SHOULDN'T CARE ABOUT IN 2026\n\nMVP-1 vertical slice\n\nPress Enter to start the elevator segment. Press q to quit.",
+            )
+            .block(ratatui::widgets::Block::bordered().title("Aura 2026"));
+            frame.render_widget(text, area);
+        })?;
 
-    terminal.draw(|frame| {
-        let area = frame.area();
-        let text = ratatui::widgets::Paragraph::new(
-            "WHAT YOU SHOULDN'T CARE ABOUT IN 2026\n\nMVP-1 vertical slice\n\nPress Enter to start the elevator segment. Press q to quit.",
-        )
-        .block(ratatui::widgets::Block::bordered().title("Aura 2026"));
-        frame.render_widget(text, area);
-    })?;
+        if !wait_for_start()? {
+            return Ok(());
+        }
 
+        execute!(stdout(), LeaveAlternateScreen)?;
+        let mut state = GameState::default();
+        play_session(&mut state, &mut terminal)?;
+
+        if !wait_for_replay()? {
+            break;
+        }
+    }
+
+    Ok(())
+}
+
+fn wait_for_start() -> io::Result<bool> {
     loop {
         if let Event::Key(key) = event::read()? {
             match key.code {
-                KeyCode::Enter => break,
-                KeyCode::Char('q') | KeyCode::Char('Q') => return Ok(()),
+                KeyCode::Enter => return Ok(true),
+                KeyCode::Char('q') | KeyCode::Char('Q') => return Ok(false),
                 _ => {}
             }
         }
     }
+}
 
+fn play_session(
+    state: &mut GameState,
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     terminal.draw(|frame| {
         let area = frame.area();
         let text = ratatui::widgets::Paragraph::new(
@@ -63,9 +85,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         frame.render_widget(text, area);
     })?;
 
-    disable_raw_mode()?;
-    execute!(stdout(), LeaveAlternateScreen)?;
-    enable_raw_mode()?;
     let floor = read_number("Elevator is waiting. Type a floor (1-100), or q to quit: ")?;
     let panic = read_yes_no("\r\nThe elevator shudders between floors. Panic? [y/N]: ")?;
     let feedback = state.apply_elevator_decision(floor, panic);
@@ -91,13 +110,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
     };
     print!("\r\n{verdict}\r\n");
-    disable_raw_mode()?;
-    print!("\r\nPress Enter to exit.\r\n");
     stdout().flush()?;
-    let mut ignored = String::new();
-    io::stdin().read_line(&mut ignored)?;
-
     Ok(())
+}
+
+fn wait_for_replay() -> io::Result<bool> {
+    print!("\r\nPress r to play again, Enter or q to quit.\r\n");
+    stdout().flush()?;
+    loop {
+        if let Event::Key(key) = event::read()? {
+            match key.code {
+                KeyCode::Char('r') | KeyCode::Char('R') => return Ok(true),
+                KeyCode::Enter | KeyCode::Char('q') | KeyCode::Char('Q') => return Ok(false),
+                _ => {}
+            }
+        }
+    }
 }
 
 fn read_number(prompt: &str) -> io::Result<u32> {

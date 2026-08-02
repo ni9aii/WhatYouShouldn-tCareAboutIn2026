@@ -30,7 +30,8 @@ The playable MVP-1 flow waits for Enter on the title screen, then runs the
 elevator, radio, and mirror segments in sequence. Each segment presents a
 binary decision and updates the shared player profile. The elevator also asks
 whether the player panics after choosing a floor. The Oracle verdict is shown
-after all three segments are complete. Press `q` at a prompt to quit.
+shown after all three segments are complete. Press `q` at a prompt to quit.
+After the verdict, press `r` to start another session or Enter to exit.
 
 In-game text is English through MVP-2. Russian localization is planned for
 MVP-3.

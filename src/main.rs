@@ -1,6 +1,7 @@
 use std::io::{self, IsTerminal, Write, stdout};
 
 use crossterm::{
+    event::{self, Event, KeyCode},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -37,18 +38,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal.draw(|frame| {
         let area = frame.area();
         let text = ratatui::widgets::Paragraph::new(
-            "WHAT YOU SHOULDN'T CARE ABOUT IN 2026\n\nMVP-1 vertical slice\n\nPress Enter to run the elevator segment. Press q to quit.",
+            "WHAT YOU SHOULDN'T CARE ABOUT IN 2026\n\nMVP-1 vertical slice\n\nPress Enter to start the elevator segment. Press q to quit.",
+        )
+        .block(ratatui::widgets::Block::bordered().title("Aura 2026"));
+        frame.render_widget(text, area);
+    })?;
+
+    loop {
+        if let Event::Key(key) = event::read()? {
+            match key.code {
+                KeyCode::Enter => break,
+                KeyCode::Char('q') | KeyCode::Char('Q') => return Ok(()),
+                _ => {}
+            }
+        }
+    }
+
+    terminal.draw(|frame| {
+        let area = frame.area();
+        let text = ratatui::widgets::Paragraph::new(
+            "ELEVATOR SEGMENT\n\nChoose a floor from 1 to 100.\nPress Enter after typing the floor, or q to quit.",
         )
         .block(ratatui::widgets::Block::bordered().title("Aura 2026"));
         frame.render_widget(text, area);
     })?;
 
     let mut input = String::new();
-    print!("\nMVP-1 is ready. Type a floor (1-100), or q to quit: ");
-    stdout().flush()?;
     disable_raw_mode()?;
+    execute!(stdout(), LeaveAlternateScreen)?;
+    print!("\nElevator is waiting. Type a floor (1-100), or q to quit: ");
+    stdout().flush()?;
     io::stdin().read_line(&mut input)?;
-    enable_raw_mode()?;
 
     if input.trim() != "q" {
         let floor = input.trim().parse::<u32>().unwrap_or(50).clamp(1, 100);
@@ -64,10 +84,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         println!("\n{feedback}\n\n{verdict}");
         println!("\nPress Enter to exit.");
-        disable_raw_mode()?;
         let mut ignored = String::new();
         io::stdin().read_line(&mut ignored)?;
-        enable_raw_mode()?;
     }
 
     Ok(())

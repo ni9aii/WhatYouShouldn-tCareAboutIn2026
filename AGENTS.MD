@@ -15,9 +15,9 @@
 - Make one regular commit per logical component or feature.
 - Keep the repository clean: do not commit generated files, local configuration,
   credentials, secrets, machine-specific paths, or real infrastructure details.
-- Use English for repository documentation, code comments, commit messages, and
-  public project artifacts unless the project explicitly establishes another
-  convention.
+- Use English for repository documentation, code comments, commit messages,
+  public project artifacts, and all in-game text. Russian-language in-game text
+  is deferred to MVP-3.
 - Update documentation whenever behavior, workflow, public interfaces, or
   project conventions change.
 

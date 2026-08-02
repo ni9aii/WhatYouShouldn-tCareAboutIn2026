@@ -67,7 +67,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     execute!(stdout(), LeaveAlternateScreen)?;
     enable_raw_mode()?;
     let floor = read_number("Elevator is waiting. Type a floor (1-100), or q to quit: ")?;
-    let feedback = state.apply_elevator_decision(floor, false);
+    let panic = read_yes_no("\r\nThe elevator shudders between floors. Panic? [y/N]: ")?;
+    let feedback = state.apply_elevator_decision(floor, panic);
     state.complete_segment("elevator");
     print!("\r\n{feedback}\r\n");
 

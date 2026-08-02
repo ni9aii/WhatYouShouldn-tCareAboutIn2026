@@ -65,20 +65,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     disable_raw_mode()?;
     execute!(stdout(), LeaveAlternateScreen)?;
+    enable_raw_mode()?;
     let floor = read_number("Elevator is waiting. Type a floor (1-100), or q to quit: ")?;
     let feedback = state.apply_elevator_decision(floor, false);
     state.complete_segment("elevator");
-    println!("\n{feedback}");
+    print!("\r\n{feedback}\r\n");
 
-    let listen = read_yes_no("\nThe radio starts broadcasting. Listen? [y/N]: ")?;
+    let listen = read_yes_no("\r\nThe radio starts broadcasting. Listen? [y/N]: ")?;
     let feedback = state.apply_radio_decision(listen);
     state.complete_segment("radio");
-    println!("\n{feedback}");
+    print!("\r\n{feedback}\r\n");
 
-    let look = read_yes_no("\nA mirror appears in the corridor. Look into it? [y/N]: ")?;
+    let look = read_yes_no("\r\nA mirror appears in the corridor. Look into it? [y/N]: ")?;
     let feedback = state.apply_mirror_decision(look);
     state.complete_segment("mirror");
-    println!("\n{feedback}");
+    print!("\r\n{feedback}\r\n");
 
     let verdict = if state.can_show_verdict() {
         oracle::generate(&state.profile)
@@ -88,8 +89,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "ORACLE VERDICT LOCKED"
         )
     };
-    println!("\n{verdict}");
-    println!("\nPress Enter to exit.");
+    print!("\r\n{verdict}\r\n");
+    disable_raw_mode()?;
+    print!("\r\nPress Enter to exit.\r\n");
+    stdout().flush()?;
     let mut ignored = String::new();
     io::stdin().read_line(&mut ignored)?;
 
@@ -98,34 +101,61 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn read_number(prompt: &str) -> io::Result<u32> {
     let mut input = String::new();
+    print!("{prompt}");
+    stdout().flush()?;
     loop {
-        print!("{prompt}");
-        stdout().flush()?;
-        input.clear();
-        io::stdin().read_line(&mut input)?;
-        let trimmed = input.trim();
-        if trimmed.eq_ignore_ascii_case("q") {
-            std::process::exit(0);
+        if let Event::Key(key) = event::read()? {
+            match key.code {
+                KeyCode::Char('q') | KeyCode::Char('Q') if input.is_empty() => {
+                    std::process::exit(0)
+                }
+                KeyCode::Char(character) if character.is_ascii_digit() => {
+                    input.push(character);
+                    print!("{character}");
+                    stdout().flush()?;
+                }
+                KeyCode::Backspace => {
+                    if input.pop().is_some() {
+                        print!("\u{8} \u{8}");
+                        stdout().flush()?;
+                    }
+                }
+                KeyCode::Enter => {
+                    if let Ok(value) = input.parse::<u32>() {
+                        print!("\r\n");
+                        stdout().flush()?;
+                        return Ok(value.clamp(1, 100));
+                    }
+                    print!("\r\nPlease enter a number from 1 to 100, or q to quit.\r\n");
+                    input.clear();
+                    print!("{prompt}");
+                    stdout().flush()?;
+                }
+                _ => {}
+            }
         }
-        if let Ok(value) = trimmed.parse::<u32>() {
-            return Ok(value.clamp(1, 100));
-        }
-        println!("Please enter a number from 1 to 100, or q to quit.");
     }
 }
 
 fn read_yes_no(prompt: &str) -> io::Result<bool> {
-    let mut input = String::new();
+    print!("{prompt}");
+    stdout().flush()?;
     loop {
-        print!("{prompt}");
-        stdout().flush()?;
-        input.clear();
-        io::stdin().read_line(&mut input)?;
-        match input.trim().to_ascii_lowercase().as_str() {
-            "y" | "yes" => return Ok(true),
-            "" | "n" | "no" => return Ok(false),
-            "q" => std::process::exit(0),
-            _ => println!("Please answer y, n, or q to quit."),
+        if let Event::Key(key) = event::read()? {
+            match key.code {
+                KeyCode::Char('y') | KeyCode::Char('Y') => {
+                    print!("\r\ny\r\n");
+                    stdout().flush()?;
+                    return Ok(true);
+                }
+                KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Enter => {
+                    print!("\r\nn\r\n");
+                    stdout().flush()?;
+                    return Ok(false);
+                }
+                KeyCode::Char('q') | KeyCode::Char('Q') => std::process::exit(0),
+                _ => {}
+            }
         }
     }
 }

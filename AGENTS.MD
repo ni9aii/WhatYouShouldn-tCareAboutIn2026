@@ -3,9 +3,9 @@
 ## Project
 
 - Repository: `ni9aii/WhatYouShouldn-tCareAboutIn2026`
-- Local path: `repository-root`
+- Local checkout path: repository root
 - Default branch: `main`
-- Project notes: `<external-notes-directory>/`
+- Project notes: keep local development notes outside this repository
 - GitHub repository is the source of truth for project history.
 
 ## Working principles

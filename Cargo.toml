@@ -1,0 +1,11 @@
+[package]
+name = "what_you_shouldnt_care_about_in_2026"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-only"
+description = "A satirical terminal game about what not to care about in 2026."
+readme = "README.md"
+
+[dependencies]
+crossterm = "0.29"
+ratatui = "0.29"

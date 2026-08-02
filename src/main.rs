@@ -63,40 +63,85 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         frame.render_widget(text, area);
     })?;
 
-    let mut input = String::new();
     disable_raw_mode()?;
     execute!(stdout(), LeaveAlternateScreen)?;
-    print!("\nElevator is waiting. Type a floor (1-100), or q to quit: ");
-    stdout().flush()?;
-    io::stdin().read_line(&mut input)?;
+    let floor = read_number("Elevator is waiting. Type a floor (1-100), or q to quit: ")?;
+    let feedback = state.apply_elevator_decision(floor, false);
+    state.complete_segment("elevator");
+    println!("\n{feedback}");
 
-    if input.trim() != "q" {
-        let floor = input.trim().parse::<u32>().unwrap_or(50).clamp(1, 100);
-        let feedback = state.apply_elevator_decision(floor, false);
-        state.complete_segment("elevator");
-        let verdict = if state.can_show_verdict() {
-            oracle::generate(&state.profile)
-        } else {
-            format!(
-                "{}\n\nComplete at least two more segments to unlock the Oracle verdict.",
-                "ORACLE VERDICT LOCKED"
-            )
-        };
-        println!("\n{feedback}\n\n{verdict}");
-        println!("\nPress Enter to exit.");
-        let mut ignored = String::new();
-        io::stdin().read_line(&mut ignored)?;
-    }
+    let listen = read_yes_no("\nThe radio starts broadcasting. Listen? [y/N]: ")?;
+    let feedback = state.apply_radio_decision(listen);
+    state.complete_segment("radio");
+    println!("\n{feedback}");
+
+    let look = read_yes_no("\nA mirror appears in the corridor. Look into it? [y/N]: ")?;
+    let feedback = state.apply_mirror_decision(look);
+    state.complete_segment("mirror");
+    println!("\n{feedback}");
+
+    let verdict = if state.can_show_verdict() {
+        oracle::generate(&state.profile)
+    } else {
+        format!(
+            "{}\n\nComplete at least two more segments to unlock the Oracle verdict.",
+            "ORACLE VERDICT LOCKED"
+        )
+    };
+    println!("\n{verdict}");
+    println!("\nPress Enter to exit.");
+    let mut ignored = String::new();
+    io::stdin().read_line(&mut ignored)?;
 
     Ok(())
+}
+
+fn read_number(prompt: &str) -> io::Result<u32> {
+    let mut input = String::new();
+    loop {
+        print!("{prompt}");
+        stdout().flush()?;
+        input.clear();
+        io::stdin().read_line(&mut input)?;
+        let trimmed = input.trim();
+        if trimmed.eq_ignore_ascii_case("q") {
+            std::process::exit(0);
+        }
+        if let Ok(value) = trimmed.parse::<u32>() {
+            return Ok(value.clamp(1, 100));
+        }
+        println!("Please enter a number from 1 to 100, or q to quit.");
+    }
+}
+
+fn read_yes_no(prompt: &str) -> io::Result<bool> {
+    let mut input = String::new();
+    loop {
+        print!("{prompt}");
+        stdout().flush()?;
+        input.clear();
+        io::stdin().read_line(&mut input)?;
+        match input.trim().to_ascii_lowercase().as_str() {
+            "y" | "yes" => return Ok(true),
+            "" | "n" | "no" => return Ok(false),
+            "q" => std::process::exit(0),
+            _ => println!("Please answer y, n, or q to quit."),
+        }
+    }
 }
 
 fn run_non_interactive_demo() -> Result<(), Box<dyn std::error::Error>> {
     let mut state = GameState::default();
     let feedback = state.apply_elevator_decision(90, false);
     state.complete_segment("elevator");
-    println!(
-        "{feedback}\n\nORACLE VERDICT LOCKED\n\nComplete at least two more segments to unlock the Oracle verdict."
-    );
+    println!("{feedback}");
+
+    let feedback = state.apply_radio_decision(false);
+    state.complete_segment("radio");
+    println!("\n{feedback}");
+
+    let feedback = state.apply_mirror_decision(true);
+    state.complete_segment("mirror");
+    println!("\n{feedback}\n\n{}", oracle::generate(&state.profile));
     Ok(())
 }

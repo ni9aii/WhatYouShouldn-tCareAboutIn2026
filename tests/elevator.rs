@@ -20,3 +20,29 @@ fn panic_increases_anxiety() {
 
     assert!(state.profile.baseline_anxiety > before);
 }
+
+#[test]
+fn radio_choices_update_different_axes() {
+    let mut listening = GameState::default();
+    listening.apply_radio_decision(true);
+    assert!(listening.profile.geopolitical_awareness > 50);
+    assert!(listening.profile.baseline_anxiety > 20);
+
+    let mut silence = GameState::default();
+    silence.apply_radio_decision(false);
+    assert!(silence.profile.locus_of_control > 50);
+    assert!(silence.profile.baseline_anxiety < 20);
+}
+
+#[test]
+fn mirror_choices_update_different_axes() {
+    let mut looking = GameState::default();
+    looking.apply_mirror_decision(true);
+    assert!(looking.profile.esoteric_attunement > 50);
+    assert!(looking.profile.baseline_anxiety > 20);
+
+    let mut avoiding = GameState::default();
+    avoiding.apply_mirror_decision(false);
+    assert!(avoiding.profile.locus_of_control > 50);
+    assert!(avoiding.profile.baseline_anxiety < 20);
+}

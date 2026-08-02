@@ -101,6 +101,30 @@ impl GameState {
             "The elevator arrives. The building has noticed your composure.".to_owned()
         }
     }
+
+    pub fn apply_radio_decision(&mut self, listen: bool) -> String {
+        if listen {
+            self.profile.adjust_geopolitical(6);
+            self.profile.adjust_anxiety(4);
+            "The radio explains everything, except why you are still listening.".to_owned()
+        } else {
+            self.profile.adjust_locus(6);
+            self.profile.adjust_anxiety(-3);
+            "You turn off the radio. The silence has its own editorial position.".to_owned()
+        }
+    }
+
+    pub fn apply_mirror_decision(&mut self, look: bool) -> String {
+        if look {
+            self.profile.adjust_esoteric(6);
+            self.profile.adjust_anxiety(5);
+            "The mirror confirms your presence and declines to elaborate.".to_owned()
+        } else {
+            self.profile.adjust_locus(5);
+            self.profile.adjust_anxiety(-4);
+            "You avoid the mirror. Nothing objectively important has changed.".to_owned()
+        }
+    }
 }
 
 fn clamp(value: u32, delta: i32) -> u32 {

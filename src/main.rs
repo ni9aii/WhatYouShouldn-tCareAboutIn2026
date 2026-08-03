@@ -135,6 +135,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 frame.render_widget(text, area);
             })?;
         }
+
+        // Wait for the player's choice WHILE the title is still on screen.
+        let outcome = loop {
+            match input.read_command()? {
+                InputCommand::Confirm => break StartOutcome::Start,
+                InputCommand::Quit | InputCommand::Cancel => break StartOutcome::Quit,
+                _ => {}
+            }
+        };
+
         execute!(
             stdout(),
             LeaveAlternateScreen,
@@ -142,7 +152,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             MoveTo(0, 0)
         )?;
 
-        match wait_for_enter_or_quit(&mut input)? {
+        match outcome {
             StartOutcome::Start => {}
             StartOutcome::Quit => break,
         }
@@ -161,18 +171,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 enum StartOutcome {
     Start,
     Quit,
-}
-
-fn wait_for_enter_or_quit(input: &mut dyn InputSource) -> io::Result<StartOutcome> {
-    let outcome = loop {
-        match input.read_command()? {
-            InputCommand::Confirm => break StartOutcome::Start,
-            InputCommand::Quit => break StartOutcome::Quit,
-            InputCommand::Cancel => break StartOutcome::Quit,
-            _ => {}
-        }
-    };
-    Ok(outcome)
 }
 
 fn run_non_interactive_demo() -> Result<(), Box<dyn std::error::Error>> {

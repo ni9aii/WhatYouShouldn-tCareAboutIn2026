@@ -1,9 +1,13 @@
 use std::io::{self, IsTerminal, Write, stdout};
 
 use crossterm::{
+    cursor::MoveTo,
     event::{self, Event, KeyCode},
     execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{
+        Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
+        enable_raw_mode,
+    },
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 use what_you_shouldnt_care_about_in_2026::{input, oracle, state::GameState};
@@ -50,7 +54,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         disable_raw_mode()?;
-        execute!(stdout(), LeaveAlternateScreen)?;
+        execute!(
+            stdout(),
+            LeaveAlternateScreen,
+            Clear(ClearType::All),
+            MoveTo(0, 0)
+        )?;
         enable_raw_mode()?;
         let mut state = GameState::default();
         if !play_session(&mut state, &mut terminal)? {
@@ -80,16 +89,12 @@ fn wait_for_start() -> io::Result<bool> {
 
 fn play_session(
     state: &mut GameState,
-    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    _terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
 ) -> Result<bool, Box<dyn std::error::Error>> {
-    terminal.draw(|frame| {
-        let area = frame.area();
-        let text = ratatui::widgets::Paragraph::new(
-            "ELEVATOR SEGMENT\n\nChoose a floor from 1 to 100.\nPress Enter after typing the floor, or q to quit.",
-        )
-        .block(ratatui::widgets::Block::bordered().title("Aura 2026"));
-        frame.render_widget(text, area);
-    })?;
+    print!(
+        "ELEVATOR SEGMENT\r\n\r\nChoose a floor from 1 to 100.\r\nPress Enter after typing the floor, or q to quit.\r\n"
+    );
+    stdout().flush()?;
 
     let floor = match read_number("Elevator is waiting. Type a floor (1-100), or q to quit: ")? {
         Some(floor) => floor,
@@ -127,9 +132,13 @@ fn play_session(
             "ORACLE VERDICT LOCKED"
         )
     };
-    print!("\r\n{verdict}\r\n");
+    print!("\r\n{}\r\n", normalize_terminal_text(&verdict));
     stdout().flush()?;
     Ok(true)
+}
+
+fn normalize_terminal_text(text: &str) -> String {
+    text.replace("\r\n", "\n").replace('\n', "\r\n")
 }
 
 fn wait_for_replay() -> io::Result<bool> {

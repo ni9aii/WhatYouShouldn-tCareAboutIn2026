@@ -3,14 +3,11 @@ use std::io::{self, IsTerminal, Write, stdout};
 use crossterm::{
     cursor::MoveTo,
     execute,
-    terminal::{
-        Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
-        enable_raw_mode,
-    },
+    terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 use what_you_shouldnt_care_about_in_2026::{
-    input::{InputCommand, InputSource, TerminalInput},
+    input::{InputCommand, InputSource, TerminalGuard, TerminalInput},
     oracle,
     segments::{self, SegmentOutcome},
     state::GameState,
@@ -120,8 +117,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut input = TerminalInput;
 
+    // RAII guard: raw mode is disabled and the alt screen left on any return
+    // or panic, so the terminal is never left frozen.
+    let _guard = TerminalGuard::enter()?;
+
     loop {
-        enable_raw_mode()?;
         execute!(stdout(), EnterAlternateScreen)?;
         {
             let backend = CrosstermBackend::new(stdout());
@@ -153,11 +153,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if !play_session(&mut state, &mut input)? {
             break;
         }
-
-        disable_raw_mode()?;
     }
 
-    disable_raw_mode()?;
     Ok(())
 }
 

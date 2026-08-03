@@ -1,6 +1,7 @@
 use std::io;
 
 use crossterm::event::{KeyEvent, KeyEventKind};
+use crossterm::terminal::{LeaveAlternateScreen, disable_raw_mode, enable_raw_mode};
 
 /// Convert a keyboard event into a game command.
 ///
@@ -177,5 +178,28 @@ pub fn prompt_choice(source: &mut dyn InputSource) -> io::Result<Choice> {
             InputCommand::Quit => break Ok(Choice::Quit),
             _ => {}
         }
+    }
+}
+
+/// RAII guard that restores the terminal to a usable state on drop.
+///
+/// `TerminalInput` switches the terminal into raw mode for menu navigation.
+/// If the game returns early or panics, the guard's `Drop` impl guarantees raw
+/// mode is disabled and the alternate screen is left, so the user is never
+/// left with a frozen, unresponsive terminal.
+pub struct TerminalGuard;
+
+impl TerminalGuard {
+    /// Enter raw mode; the terminal is restored when the guard is dropped.
+    pub fn enter() -> io::Result<Self> {
+        enable_raw_mode()?;
+        Ok(TerminalGuard)
+    }
+}
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        let _ = disable_raw_mode();
+        let _ = crossterm::execute!(std::io::stdout(), LeaveAlternateScreen);
     }
 }

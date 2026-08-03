@@ -96,3 +96,24 @@ fn replaying_a_completed_segment_does_not_double_count() {
     assert_eq!(outcome, SegmentOutcome::Cancelled);
     assert_eq!(state.completed_segments(), first_count);
 }
+
+/// Two games started from the same seed and driven by the same inputs must
+/// produce identical profiles and verdicts (reproducibility for replays/tests).
+#[test]
+fn same_seed_yields_identical_playthrough() {
+    fn run() -> (GameState, String) {
+        let mut state = GameState::with_seed(42);
+        let mut segments = what_you_shouldnt_care_about_in_2026::segments::all_segments();
+        let mut input = ScriptedInput::new(&playthrough());
+        for segment in segments.iter_mut() {
+            let _ = segment.run(&mut state, &mut input).unwrap();
+        }
+        let verdict = oracle::generate(&state.profile);
+        (state, verdict)
+    }
+
+    let (a, verdict_a) = run();
+    let (b, verdict_b) = run();
+    assert_eq!(a.profile, b.profile);
+    assert_eq!(verdict_a, verdict_b);
+}

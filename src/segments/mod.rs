@@ -72,3 +72,17 @@ pub fn menu_key_to_index(key: InputCommand, count: usize) -> Option<usize> {
         _ => None,
     }
 }
+
+/// Build the MVP-1 segment registry in menu display order.
+pub fn all_segments() -> Vec<Box<dyn Segment>> {
+    vec![
+        Box::new(elevator::ElevatorSegment),
+        Box::new(radio::RadioSegment),
+        Box::new(mirror::MirrorSegment),
+    ]
+}
+
+/// Segment id/title pairs for menu rendering.
+pub fn segment_entries() -> Vec<(&'static str, &'static str)> {
+    all_segments().iter().map(|s| (s.id(), s.title())).collect()
+}

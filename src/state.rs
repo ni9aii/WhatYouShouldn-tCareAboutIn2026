@@ -109,6 +109,11 @@ impl GameState {
         self.completed.len()
     }
 
+    /// Borrow the set of completed segment ids (for menu rendering).
+    pub fn completed_set(&self) -> &BTreeSet<String> {
+        &self.completed
+    }
+
     pub fn complete_segment(&mut self, id: &str) {
         self.completed.insert(id.to_owned());
     }

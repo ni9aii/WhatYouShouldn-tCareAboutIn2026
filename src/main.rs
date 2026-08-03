@@ -10,166 +10,14 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 use what_you_shouldnt_care_about_in_2026::{
-    input::{self, Choice, InputCommand, InputSource, TerminalInput},
+    input::{self, InputCommand, InputSource, TerminalInput},
     oracle,
+    segments::SegmentOutcome,
     state::GameState,
+    ui,
 };
 
-/// Outcome of an interactive prompt.
-///
-/// `Value` carries the parsed result. `Cancel` means the player pressed Esc and
-/// wants to return to the menu without losing progress. `Quit` means the player
-/// asked to leave the game entirely (q / EOF).
-enum ReadOutcome<T> {
-    Value(T),
-    Cancel,
-    Quit,
-}
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    if !stdout().is_terminal() {
-        return run_non_interactive_demo();
-    }
-
-    let mut input = TerminalInput;
-
-    loop {
-        // Enter the alternate screen only for the title screen, which is drawn
-        // through ratatui. The gameplay section below writes plain text, so we
-        // leave the alternate screen before it to avoid mixing ratatui's buffer
-        // management with raw `print!` output (which previously crashed on replay).
-        enable_raw_mode()?;
-        execute!(stdout(), EnterAlternateScreen)?;
-        {
-            let backend = CrosstermBackend::new(stdout());
-            let mut terminal = Terminal::new(backend)?;
-            terminal.draw(|frame| {
-                let area = frame.area();
-                let text = ratatui::widgets::Paragraph::new(
-                    "WHAT YOU SHOULDN'T CARE ABOUT IN 2026\n\nMVP-1 vertical slice\n\nPress Enter to start the elevator segment. Press Esc or q to quit.",
-                )
-                .block(ratatui::widgets::Block::bordered().title("Aura 2026"));
-                frame.render_widget(text, area);
-            })?;
-        }
-        execute!(
-            stdout(),
-            LeaveAlternateScreen,
-            Clear(ClearType::All),
-            MoveTo(0, 0)
-        )?;
-
-        match wait_for_start(&mut input)? {
-            StartOutcome::Start => {}
-            StartOutcome::Quit => break,
-        }
-
-        let mut state = GameState::default();
-        match play_session(&mut state, &mut input)? {
-            SessionOutcome::Replay => {}
-            SessionOutcome::Quit => break,
-        }
-
-        match wait_for_replay(&mut input)? {
-            ReplayOutcome::Replay => {}
-            ReplayOutcome::Quit => break,
-        }
-
-        disable_raw_mode()?;
-    }
-
-    disable_raw_mode()?;
-    Ok(())
-}
-
-enum StartOutcome {
-    Start,
-    Quit,
-}
-
-fn wait_for_start(input: &mut dyn InputSource) -> io::Result<StartOutcome> {
-    let outcome = loop {
-        match input.read_command()? {
-            InputCommand::Confirm => break StartOutcome::Start,
-            InputCommand::Quit => break StartOutcome::Quit,
-            // Esc quits from the start screen: there is no progress to preserve
-            // yet, and the spec requires Esc to drop back to a safe exit.
-            InputCommand::Cancel => break StartOutcome::Quit,
-            _ => {}
-        }
-    };
-    Ok(outcome)
-}
-
-enum SessionOutcome {
-    Replay,
-    Quit,
-}
-
-fn play_session(state: &mut GameState, input: &mut dyn InputSource) -> io::Result<SessionOutcome> {
-    print!(
-        "ELEVATOR SEGMENT\r\n\r\nChoose a floor from 1 to 100.\r\nType digits, then press Enter to confirm, Esc to return to the menu, or q to quit.\r\n"
-    );
-    stdout().flush()?;
-
-    let floor = match read_number(input, "Elevator is waiting. Type a floor (1-100): ")? {
-        ReadOutcome::Value(floor) => floor,
-        ReadOutcome::Cancel => return Ok(SessionOutcome::Replay),
-        ReadOutcome::Quit => return Ok(SessionOutcome::Quit),
-    };
-    let panic = match read_yes_no(
-        input,
-        "\r\nThe elevator shudders between floors. Panic? (y/n, then Enter): ",
-    )? {
-        ReadOutcome::Value(panic) => panic,
-        ReadOutcome::Cancel => return Ok(SessionOutcome::Replay),
-        ReadOutcome::Quit => return Ok(SessionOutcome::Quit),
-    };
-    let feedback = state.apply_elevator_decision(floor, panic);
-    state.complete_segment("elevator");
-    print!("\r\n{feedback}\r\n");
-
-    let listen = match read_yes_no(
-        input,
-        "\r\nThe radio starts broadcasting. Listen? (y/n, then Enter): ",
-    )? {
-        ReadOutcome::Value(listen) => listen,
-        ReadOutcome::Cancel => return Ok(SessionOutcome::Replay),
-        ReadOutcome::Quit => return Ok(SessionOutcome::Quit),
-    };
-    let feedback = state.apply_radio_decision(listen);
-    state.complete_segment("radio");
-    print!("\r\n{feedback}\r\n");
-
-    let look = match read_yes_no(
-        input,
-        "\r\nA mirror appears in the corridor. Look into it? (y/n, then Enter): ",
-    )? {
-        ReadOutcome::Value(look) => look,
-        ReadOutcome::Cancel => return Ok(SessionOutcome::Replay),
-        ReadOutcome::Quit => return Ok(SessionOutcome::Quit),
-    };
-    let feedback = state.apply_mirror_decision(look);
-    state.complete_segment("mirror");
-    print!("\r\n{feedback}\r\n");
-
-    let verdict = if state.can_show_verdict() {
-        oracle::generate(&state.profile)
-    } else {
-        format!(
-            "{}\n\nComplete at least two more segments to unlock the Oracle verdict.",
-            "ORACLE VERDICT LOCKED"
-        )
-    };
-    print!("\r\n{}\r\n", normalize_terminal_text(&verdict));
-    stdout().flush()?;
-    Ok(SessionOutcome::Replay)
-}
-
-fn normalize_terminal_text(text: &str) -> String {
-    text.replace('\r', "").replace('\n', "\r\n")
-}
-
+/// Outcome of the replay prompt.
 enum ReplayOutcome {
     Replay,
     Quit,
@@ -191,60 +39,143 @@ fn wait_for_replay(input: &mut dyn InputSource) -> io::Result<ReplayOutcome> {
     Ok(outcome)
 }
 
-fn read_number(input: &mut dyn InputSource, prompt: &str) -> io::Result<ReadOutcome<u32>> {
-    let mut buffer = String::new();
-    print!("{prompt}");
-    stdout().flush()?;
+/// Run a single session driven by the segment menu, then show the verdict and
+/// the replay prompt. Returns whether the player asked to replay.
+fn play_session(state: &mut GameState, input: &mut dyn InputSource) -> io::Result<bool> {
+    let mut segments = segments::all_segments();
+    let entries = segments::segment_entries();
+
+    loop {
+        print!("{}", ui::format_menu(&entries, state.completed_set()));
+        match read_menu_selection(input, segments.len())? {
+            MenuSelection::Index(index) => {
+                let outcome = segments[index].run(state, input)?;
+                match outcome {
+                    SegmentOutcome::Completed => {}
+                    SegmentOutcome::Cancelled => {
+                        print!("\r\nReturned to the menu.\r\n");
+                    }
+                }
+            }
+            MenuSelection::Verdict => {
+                show_verdict(state)?;
+                return Ok(handle_replay(input)?);
+            }
+            MenuSelection::Quit => return Ok(false),
+        }
+
+        if state.can_show_verdict() {
+            print!(
+                "\r\nThe Oracle verdict is available. Press v for the verdict, or pick another segment.\r\n"
+            );
+        }
+    }
+}
+
+enum MenuSelection {
+    Index(usize),
+    Verdict,
+    Quit,
+}
+
+/// Read a menu choice: number keys pick a segment, `v` requests the verdict
+/// (only when available), `Esc`/`q` quit.
+fn read_menu_selection(input: &mut dyn InputSource, count: usize) -> io::Result<MenuSelection> {
     loop {
         match input.read_command()? {
-            InputCommand::Character(character) if character.is_ascii_digit() => {
-                buffer.push(character);
-                print!("{character}");
-                stdout().flush()?;
-            }
-            InputCommand::Backspace => {
-                if buffer.pop().is_some() {
-                    print!("\u{8} \u{8}");
-                    stdout().flush()?;
+            InputCommand::Character(c @ '1'..='9') => {
+                let index = c as usize - '1' as usize;
+                if index < count {
+                    return Ok(MenuSelection::Index(index));
                 }
             }
-            InputCommand::Confirm => match input::parse_floor_input(&buffer) {
-                Ok(Some(value)) => {
-                    print!("\r\n");
-                    stdout().flush()?;
-                    break Ok(ReadOutcome::Value(value));
-                }
-                Ok(None) => break Ok(ReadOutcome::Quit),
-                Err(_) => {
-                    print!("\r\nPlease enter a number from 1 to 100.\r\n");
-                    buffer.clear();
-                    print!("{prompt}");
-                    stdout().flush()?;
-                }
-            },
-            InputCommand::Cancel => break Ok(ReadOutcome::Cancel),
-            InputCommand::Quit => break Ok(ReadOutcome::Quit),
+            InputCommand::Character('v') | InputCommand::Character('V') => {
+                return Ok(MenuSelection::Verdict);
+            }
+            InputCommand::Quit => return Ok(MenuSelection::Quit),
+            InputCommand::Cancel => return Ok(MenuSelection::Quit),
             _ => {}
         }
     }
 }
 
-fn read_yes_no(input: &mut dyn InputSource, prompt: &str) -> io::Result<ReadOutcome<bool>> {
-    print!("{prompt}");
+fn show_verdict(state: &GameState) -> io::Result<()> {
+    let verdict = oracle::generate(&state.profile);
+    print!("\r\n{}\r\n", verdict.replace('\n', "\r\n"));
     stdout().flush()?;
-    match input::prompt_choice(input)? {
-        Choice::Confirmed => {
-            print!("\r\ny\r\n");
-            stdout().flush()?;
-            Ok(ReadOutcome::Value(true))
-        }
-        Choice::Cancelled => {
-            print!("\r\nn\r\n");
-            stdout().flush()?;
-            Ok(ReadOutcome::Value(false))
-        }
-        Choice::Quit => Ok(ReadOutcome::Quit),
+    Ok(())
+}
+
+fn handle_replay(input: &mut dyn InputSource) -> io::Result<bool> {
+    match wait_for_replay(input)? {
+        ReplayOutcome::Replay => Ok(true),
+        ReplayOutcome::Quit => Ok(false),
     }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if !stdout().is_terminal() {
+        return run_non_interactive_demo();
+    }
+
+    let mut input = TerminalInput;
+
+    loop {
+        enable_raw_mode()?;
+        execute!(stdout(), EnterAlternateScreen)?;
+        {
+            let backend = CrosstermBackend::new(stdout());
+            let mut terminal = Terminal::new(backend)?;
+            terminal.draw(|frame| {
+                let area = frame.area();
+                let text = ratatui::widgets::Paragraph::new(
+                    "WHAT YOU SHOULDN'T CARE ABOUT IN 2026\n\nMVP-1 vertical slice\n\nPress Enter to enter the broadcast. Press Esc or q to quit.",
+                )
+                .block(ratatui::widgets::Block::bordered().title("Aura 2026"));
+                frame.render_widget(text, area);
+            })?;
+        }
+        execute!(
+            stdout(),
+            LeaveAlternateScreen,
+            Clear(ClearType::All),
+            MoveTo(0, 0)
+        )?;
+
+        match wait_for_enter_or_quit(&mut input)? {
+            StartOutcome::Start => {}
+            StartOutcome::Quit => break,
+        }
+
+        ui::render_onboarding();
+
+        let mut state = GameState::default();
+        if !play_session(&mut state, &mut input)? {
+            break;
+        }
+
+        disable_raw_mode()?;
+    }
+
+    disable_raw_mode()?;
+    Ok(())
+}
+
+enum StartOutcome {
+    Start,
+    Quit,
+}
+
+fn wait_for_enter_or_quit(input: &mut dyn InputSource) -> io::Result<StartOutcome> {
+    let outcome = loop {
+        match input.read_command()? {
+            InputCommand::Confirm => break StartOutcome::Start,
+            InputCommand::Quit => break StartOutcome::Quit,
+            InputCommand::Cancel => break StartOutcome::Quit,
+            _ => {}
+        }
+    };
+    Ok(outcome)
 }
 
 fn run_non_interactive_demo() -> Result<(), Box<dyn std::error::Error>> {

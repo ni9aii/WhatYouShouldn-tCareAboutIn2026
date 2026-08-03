@@ -59,7 +59,7 @@ impl InputSource for TerminalInput {
             if let crossterm::event::Event::Key(key) = crossterm::event::read()? {
                 let command = InputCommand::from(key);
                 if command != InputCommand::Unknown {
-                    return Ok(command);
+                    break Ok(command);
                 }
             }
         }
@@ -84,5 +84,42 @@ pub fn parse_yes_no_input(input: &str) -> Result<Option<bool>, &'static str> {
         "" | "n" | "no" => Ok(Some(false)),
         "q" => Ok(None),
         _ => Err("answer must be y, n, or q"),
+    }
+}
+
+/// Outcome of a confirm/cancel prompt driven by an `InputSource`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Choice {
+    Confirmed,
+    Cancelled,
+    Quit,
+}
+
+/// Run a two-step yes/no selection through an abstract source.
+///
+/// The player first chooses `y`/`n` (which sets the pending answer), then
+/// confirms with `Enter`. This avoids the previous behaviour where any key
+/// was accepted instantly and the choice was never explicitly confirmed.
+///
+/// - `y`/`Y` selects yes; `n`/`N` selects no. Re-selecting changes the pending
+///   answer. `Enter` confirms the pending answer (defaulting to no when none
+///   was chosen). `Esc` cancels back to the menu; `q`/`Q` quits the game.
+pub fn prompt_choice(source: &mut dyn InputSource) -> io::Result<Choice> {
+    let mut pending: Option<bool> = None;
+    loop {
+        match source.read_command()? {
+            InputCommand::Character('y') | InputCommand::Character('Y') => pending = Some(true),
+            InputCommand::Character('n') | InputCommand::Character('N') => pending = Some(false),
+            InputCommand::Confirm => {
+                break Ok(if pending.unwrap_or(false) {
+                    Choice::Confirmed
+                } else {
+                    Choice::Cancelled
+                });
+            }
+            InputCommand::Cancel => break Ok(Choice::Cancelled),
+            InputCommand::Quit => break Ok(Choice::Quit),
+            _ => {}
+        }
     }
 }

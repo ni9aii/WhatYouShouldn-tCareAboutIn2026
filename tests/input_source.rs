@@ -6,7 +6,7 @@
 
 use std::io;
 
-use what_you_shouldnt_care_about_in_2026::input::{InputCommand, InputSource};
+use what_you_shouldnt_care_about_in_2026::input::{Choice, InputCommand, InputSource};
 
 /// A deterministic source of commands used to drive game logic in tests.
 struct ScriptedInput {
@@ -66,4 +66,43 @@ fn key_release_events_are_ignored_as_unknown() {
     let mut release = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
     release.kind = KeyEventKind::Release;
     assert_eq!(InputCommand::from(release), InputCommand::Unknown);
+}
+
+#[test]
+fn prompt_choice_requires_confirm_to_resolve() {
+    // y alone does not resolve; Enter confirms the pending yes.
+    let mut source = ScriptedInput::new(&[InputCommand::Character('y'), InputCommand::Confirm]);
+    assert_eq!(
+        what_you_shouldnt_care_about_in_2026::input::prompt_choice(&mut source).unwrap(),
+        Choice::Confirmed
+    );
+
+    // n then Enter confirms no.
+    let mut source = ScriptedInput::new(&[InputCommand::Character('n'), InputCommand::Confirm]);
+    assert_eq!(
+        what_you_shouldnt_care_about_in_2026::input::prompt_choice(&mut source).unwrap(),
+        Choice::Cancelled
+    );
+
+    // bare Enter confirms the default (no).
+    let mut source = ScriptedInput::new(&[InputCommand::Confirm]);
+    assert_eq!(
+        what_you_shouldnt_care_about_in_2026::input::prompt_choice(&mut source).unwrap(),
+        Choice::Cancelled
+    );
+}
+
+#[test]
+fn prompt_choice_handles_esc_and_quit() {
+    let mut source = ScriptedInput::new(&[InputCommand::Cancel]);
+    assert_eq!(
+        what_you_shouldnt_care_about_in_2026::input::prompt_choice(&mut source).unwrap(),
+        Choice::Cancelled
+    );
+
+    let mut source = ScriptedInput::new(&[InputCommand::Quit]);
+    assert_eq!(
+        what_you_shouldnt_care_about_in_2026::input::prompt_choice(&mut source).unwrap(),
+        Choice::Quit
+    );
 }

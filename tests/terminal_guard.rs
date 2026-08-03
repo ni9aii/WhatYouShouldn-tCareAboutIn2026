@@ -17,8 +17,6 @@ fn guard_drops_without_panic_when_entered() {
     if let Ok(guard) = TerminalGuard::enter() {
         drop(guard);
     }
-    // Reaching here means no panic occurred.
-    assert!(true);
 }
 
 #[test]

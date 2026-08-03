@@ -6,7 +6,7 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
-use what_you_shouldnt_care_about_in_2026::{oracle, state::GameState};
+use what_you_shouldnt_care_about_in_2026::{input, oracle, state::GameState};
 
 struct TerminalGuard;
 
@@ -45,10 +45,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })?;
 
         if !wait_for_start()? {
-            return Ok(());
+            break;
         }
 
+        disable_raw_mode()?;
         execute!(stdout(), LeaveAlternateScreen)?;
+        enable_raw_mode()?;
         let mut state = GameState::default();
         play_session(&mut state, &mut terminal)?;
 
@@ -57,6 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    disable_raw_mode()?;
     Ok(())
 }
 
@@ -85,18 +88,30 @@ fn play_session(
         frame.render_widget(text, area);
     })?;
 
-    let floor = read_number("Elevator is waiting. Type a floor (1-100), or q to quit: ")?;
-    let panic = read_yes_no("\r\nThe elevator shudders between floors. Panic? [y/N]: ")?;
+    let floor = match read_number("Elevator is waiting. Type a floor (1-100), or q to quit: ")? {
+        Some(floor) => floor,
+        None => return Ok(()),
+    };
+    let panic = match read_yes_no("\r\nThe elevator shudders between floors. Panic? [y/N]: ")? {
+        Some(panic) => panic,
+        None => return Ok(()),
+    };
     let feedback = state.apply_elevator_decision(floor, panic);
     state.complete_segment("elevator");
     print!("\r\n{feedback}\r\n");
 
-    let listen = read_yes_no("\r\nThe radio starts broadcasting. Listen? [y/N]: ")?;
+    let listen = match read_yes_no("\r\nThe radio starts broadcasting. Listen? [y/N]: ")? {
+        Some(listen) => listen,
+        None => return Ok(()),
+    };
     let feedback = state.apply_radio_decision(listen);
     state.complete_segment("radio");
     print!("\r\n{feedback}\r\n");
 
-    let look = read_yes_no("\r\nA mirror appears in the corridor. Look into it? [y/N]: ")?;
+    let look = match read_yes_no("\r\nA mirror appears in the corridor. Look into it? [y/N]: ")? {
+        Some(look) => look,
+        None => return Ok(()),
+    };
     let feedback = state.apply_mirror_decision(look);
     state.complete_segment("mirror");
     print!("\r\n{feedback}\r\n");
@@ -128,16 +143,14 @@ fn wait_for_replay() -> io::Result<bool> {
     }
 }
 
-fn read_number(prompt: &str) -> io::Result<u32> {
+fn read_number(prompt: &str) -> io::Result<Option<u32>> {
     let mut input = String::new();
     print!("{prompt}");
     stdout().flush()?;
     loop {
         if let Event::Key(key) = event::read()? {
             match key.code {
-                KeyCode::Char('q') | KeyCode::Char('Q') if input.is_empty() => {
-                    std::process::exit(0)
-                }
+                KeyCode::Char('q') | KeyCode::Char('Q') if input.is_empty() => return Ok(None),
                 KeyCode::Char(character) if character.is_ascii_digit() => {
                     input.push(character);
                     print!("{character}");
@@ -150,10 +163,13 @@ fn read_number(prompt: &str) -> io::Result<u32> {
                     }
                 }
                 KeyCode::Enter => {
-                    if let Ok(value) = input.parse::<u32>() {
+                    if let Ok(Some(value)) = input::parse_floor_input(&input) {
                         print!("\r\n");
                         stdout().flush()?;
-                        return Ok(value.clamp(1, 100));
+                        return Ok(Some(value));
+                    }
+                    if input::parse_floor_input(&input) == Ok(None) {
+                        return Ok(None);
                     }
                     print!("\r\nPlease enter a number from 1 to 100, or q to quit.\r\n");
                     input.clear();
@@ -166,7 +182,7 @@ fn read_number(prompt: &str) -> io::Result<u32> {
     }
 }
 
-fn read_yes_no(prompt: &str) -> io::Result<bool> {
+fn read_yes_no(prompt: &str) -> io::Result<Option<bool>> {
     print!("{prompt}");
     stdout().flush()?;
     loop {
@@ -175,14 +191,14 @@ fn read_yes_no(prompt: &str) -> io::Result<bool> {
                 KeyCode::Char('y') | KeyCode::Char('Y') => {
                     print!("\r\ny\r\n");
                     stdout().flush()?;
-                    return Ok(true);
+                    return Ok(Some(true));
                 }
                 KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Enter => {
                     print!("\r\nn\r\n");
                     stdout().flush()?;
-                    return Ok(false);
+                    return Ok(Some(false));
                 }
-                KeyCode::Char('q') | KeyCode::Char('Q') => std::process::exit(0),
+                KeyCode::Char('q') | KeyCode::Char('Q') => return Ok(None),
                 _ => {}
             }
         }

@@ -4,6 +4,7 @@ use crate::input::{InputCommand, InputSource};
 use crate::state::GameState;
 
 pub mod elevator;
+pub mod radio;
 
 /// Result of running a segment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

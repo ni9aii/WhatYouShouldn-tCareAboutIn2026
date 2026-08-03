@@ -147,7 +147,7 @@ pub fn parse_yes_no_input(input: &str) -> Result<Option<bool>, &'static str> {
 /// Outcome of a confirm/cancel prompt driven by an `InputSource`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Choice {
-    Confirmed,
+    Selected(bool),
     Cancelled,
     Quit,
 }
@@ -168,11 +168,7 @@ pub fn prompt_choice(source: &mut dyn InputSource) -> io::Result<Choice> {
             InputCommand::Character('y') | InputCommand::Character('Y') => pending = Some(true),
             InputCommand::Character('n') | InputCommand::Character('N') => pending = Some(false),
             InputCommand::Confirm => {
-                break Ok(if pending.unwrap_or(false) {
-                    Choice::Confirmed
-                } else {
-                    Choice::Cancelled
-                });
+                break Ok(Choice::Selected(pending.unwrap_or(false)));
             }
             InputCommand::Cancel => break Ok(Choice::Cancelled),
             InputCommand::Quit => break Ok(Choice::Quit),

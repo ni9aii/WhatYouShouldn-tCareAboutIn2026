@@ -1,11 +1,11 @@
-use what_you_shouldnt_care_about_in_2026::state::{GameState, PlayerAspects};
+use what_you_shouldnt_worry_about_in_2026::state::{GameState, PlayerAspects};
 
 #[test]
 fn default_state_uses_default_seed() {
     let state = GameState::default();
     assert_eq!(
         state.seed,
-        what_you_shouldnt_care_about_in_2026::state::DEFAULT_SEED
+        what_you_shouldnt_worry_about_in_2026::state::DEFAULT_SEED
     );
 }
 

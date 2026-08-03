@@ -45,17 +45,32 @@ Press Enter to enter the broadcast.\r\n"
 pub fn format_menu(
     segments: &[(&str, &str)],
     completed: &std::collections::BTreeSet<String>,
+    selected: usize,
+    verdict_available: bool,
 ) -> String {
     let mut out =
         String::from("SEGMENT MENU\r\nChoose a segment (press the number or arrow + Enter):\r\n");
     for (index, (id, title)) in segments.iter().enumerate() {
+        let cursor = if index == selected { ">" } else { " " };
         let mark = if completed.contains(*id) {
             " [done]"
         } else {
             ""
         };
-        out.push_str(&format!("{}. {} ({}){}\r\n", index + 1, title, id, mark));
+        out.push_str(&format!(
+            "{} {}. {} ({}){}\r\n",
+            cursor,
+            index + 1,
+            title,
+            id,
+            mark
+        ));
     }
-    out.push_str("Press Enter to start the highlighted segment. Esc returns to the menu.\r\n");
+    if verdict_available {
+        out.push_str("Press v to view the Oracle verdict.\r\n");
+    } else {
+        out.push_str("The Oracle is locked until all three segments are complete.\r\n");
+    }
+    out.push_str("Press Enter to start the highlighted segment. Esc exits the run.\r\n");
     out
 }

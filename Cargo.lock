@@ -635,7 +635,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
-name = "what_you_shouldnt_care_about_in_2026"
+name = "what_you_shouldnt_worry_about_in_2026"
 version = "0.1.0"
 dependencies = [
  "crossterm 0.29.0",

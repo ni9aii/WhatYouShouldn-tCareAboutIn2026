@@ -1,5 +1,6 @@
 use std::io;
 
+use crate::input::ReadOutcome;
 use crate::segments::{Segment, SegmentOutcome, read_yes_no};
 use crate::state::GameState;
 
@@ -30,10 +31,15 @@ impl Segment for RadioSegment {
         state: &mut GameState,
         input: &mut dyn crate::input::InputSource,
     ) -> io::Result<SegmentOutcome> {
+        if state.is_segment_completed(self.id()) {
+            print!("RADIO SEGMENT\r\n\r\nThis segment is already complete.\r\n");
+            return Ok(SegmentOutcome::Completed);
+        }
         print!("RADIO SEGMENT\r\n\r\nThe radio starts broadcasting.\r\n");
         let listen = match read_yes_no(input)? {
-            Some(listen) => listen,
-            None => return Ok(SegmentOutcome::Cancelled),
+            ReadOutcome::Value(listen) => listen,
+            ReadOutcome::Cancel => return Ok(SegmentOutcome::Cancelled),
+            ReadOutcome::Quit => return Ok(SegmentOutcome::Quit),
         };
 
         let feedback = state.apply_radio_decision(listen);

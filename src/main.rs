@@ -6,7 +6,7 @@ use crossterm::{
     terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
-use what_you_shouldnt_care_about_in_2026::{
+use what_you_shouldnt_worry_about_in_2026::{
     input::{InputCommand, InputSource, TerminalGuard, TerminalInput},
     oracle,
     segments::{self, SegmentOutcome},
@@ -41,10 +41,24 @@ fn wait_for_replay(input: &mut dyn InputSource) -> io::Result<ReplayOutcome> {
 fn play_session(state: &mut GameState, input: &mut dyn InputSource) -> io::Result<bool> {
     let mut segments = segments::all_segments();
     let entries = segments::segment_entries();
+    let mut selected = 0;
 
     loop {
-        print!("{}", ui::format_menu(&entries, state.completed_set()));
-        match read_menu_selection(input, segments.len())? {
+        print!(
+            "{}",
+            ui::format_menu(
+                &entries,
+                state.completed_set(),
+                selected,
+                state.can_show_verdict()
+            )
+        );
+        match read_menu_selection(
+            input,
+            segments.len(),
+            &mut selected,
+            state.can_show_verdict(),
+        )? {
             MenuSelection::Index(index) => {
                 let outcome = segments[index].run(state, input)?;
                 match outcome {
@@ -52,6 +66,7 @@ fn play_session(state: &mut GameState, input: &mut dyn InputSource) -> io::Resul
                     SegmentOutcome::Cancelled => {
                         print!("\r\nReturned to the menu.\r\n");
                     }
+                    SegmentOutcome::Quit => return Ok(false),
                 }
             }
             MenuSelection::Verdict => {
@@ -59,12 +74,6 @@ fn play_session(state: &mut GameState, input: &mut dyn InputSource) -> io::Resul
                 return handle_replay(input);
             }
             MenuSelection::Quit => return Ok(false),
-        }
-
-        if state.can_show_verdict() {
-            print!(
-                "\r\nThe Oracle verdict is available. Press v for the verdict, or pick another segment.\r\n"
-            );
         }
     }
 }
@@ -77,7 +86,12 @@ enum MenuSelection {
 
 /// Read a menu choice: number keys pick a segment, `v` requests the verdict
 /// (only when available), `Esc`/`q` quit.
-fn read_menu_selection(input: &mut dyn InputSource, count: usize) -> io::Result<MenuSelection> {
+fn read_menu_selection(
+    input: &mut dyn InputSource,
+    count: usize,
+    selected: &mut usize,
+    verdict_available: bool,
+) -> io::Result<MenuSelection> {
     loop {
         match input.read_command()? {
             InputCommand::Character(c @ '1'..='9') => {
@@ -86,8 +100,22 @@ fn read_menu_selection(input: &mut dyn InputSource, count: usize) -> io::Result<
                     return Ok(MenuSelection::Index(index));
                 }
             }
+            InputCommand::Up => {
+                *selected = if *selected == 0 {
+                    count - 1
+                } else {
+                    *selected - 1
+                };
+            }
+            InputCommand::Down => {
+                *selected = (*selected + 1) % count;
+            }
+            InputCommand::Confirm => return Ok(MenuSelection::Index(*selected)),
             InputCommand::Character('v') | InputCommand::Character('V') => {
-                return Ok(MenuSelection::Verdict);
+                if verdict_available {
+                    return Ok(MenuSelection::Verdict);
+                }
+                print!("\r\nThe Oracle is locked. Complete all three segments first.\r\n");
             }
             InputCommand::Quit => return Ok(MenuSelection::Quit),
             InputCommand::Cancel => return Ok(MenuSelection::Quit),
@@ -158,6 +186,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         ui::render_onboarding();
+        loop {
+            match input.read_command()? {
+                InputCommand::Confirm => break,
+                InputCommand::Quit | InputCommand::Cancel => return Ok(()),
+                _ => {}
+            }
+        }
 
         let mut state = GameState::default();
         if !play_session(&mut state, &mut input)? {

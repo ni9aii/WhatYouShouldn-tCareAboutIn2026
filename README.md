@@ -1,6 +1,6 @@
-# What You Shouldn't Care About in 2026
+# What You Shouldn't Worry About in 2026
 
-A satirical terminal game about the things you should not care about in 2026.
+A satirical terminal game about the things you should not worry about in 2026.
 
 ## Status
 

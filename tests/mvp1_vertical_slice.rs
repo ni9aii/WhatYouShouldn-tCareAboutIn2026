@@ -1,4 +1,4 @@
-use what_you_shouldnt_care_about_in_2026::{oracle, state::GameState};
+use what_you_shouldnt_worry_about_in_2026::{oracle, state::GameState};
 
 #[test]
 fn default_game_state_starts_empty_and_cannot_show_verdict() {

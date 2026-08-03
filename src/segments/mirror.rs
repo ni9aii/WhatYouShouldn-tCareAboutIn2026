@@ -1,5 +1,6 @@
 use std::io;
 
+use crate::input::ReadOutcome;
 use crate::segments::{Segment, SegmentOutcome, read_yes_no};
 use crate::state::GameState;
 
@@ -29,10 +30,15 @@ impl Segment for MirrorSegment {
         state: &mut GameState,
         input: &mut dyn crate::input::InputSource,
     ) -> io::Result<SegmentOutcome> {
+        if state.is_segment_completed(self.id()) {
+            print!("MIRROR SEGMENT\r\n\r\nThis segment is already complete.\r\n");
+            return Ok(SegmentOutcome::Completed);
+        }
         print!("MIRROR SEGMENT\r\n\r\nA mirror appears in the corridor.\r\n");
         let look = match read_yes_no(input)? {
-            Some(look) => look,
-            None => return Ok(SegmentOutcome::Cancelled),
+            ReadOutcome::Value(look) => look,
+            ReadOutcome::Cancel => return Ok(SegmentOutcome::Cancelled),
+            ReadOutcome::Quit => return Ok(SegmentOutcome::Quit),
         };
 
         let feedback = state.apply_mirror_decision(look);

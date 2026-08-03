@@ -2,7 +2,7 @@
 //! guard cannot enter raw mode, so we only assert it fails cleanly and that
 //! dropping a constructed guard does not panic.
 
-use what_you_shouldnt_care_about_in_2026::input::TerminalGuard;
+use what_you_shouldnt_worry_about_in_2026::input::TerminalGuard;
 
 #[test]
 fn enter_returns_a_result_and_never_panics() {

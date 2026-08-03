@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use what_you_shouldnt_care_about_in_2026::ui::{format_menu, onboarding_text};
+use what_you_shouldnt_worry_about_in_2026::ui::{format_menu, onboarding_text};
 
 #[test]
 fn onboarding_mentions_controls_and_verdict_threshold() {
@@ -22,7 +22,7 @@ fn menu_marks_completed_segments() {
         ("radio", "Radio Receiver"),
         ("mirror", "Mirror Corridor"),
     ];
-    let menu = format_menu(&segments, &done);
+    let menu = format_menu(&segments, &done, 0, false);
     assert!(menu.contains("elevator"));
     assert!(menu.contains("[done]"));
     assert!(menu.contains("radio"));

@@ -1,4 +1,4 @@
-use what_you_shouldnt_care_about_in_2026::state::GameState;
+use what_you_shouldnt_worry_about_in_2026::state::GameState;
 
 #[test]
 fn high_floor_increases_social_and_geopolitical_axes() {

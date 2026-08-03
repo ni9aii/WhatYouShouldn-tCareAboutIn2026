@@ -2,7 +2,7 @@
 
 ## Project
 
-- Repository: `ni9aii/WhatYouShouldn-tCareAboutIn2026`
+- Repository: `ni9aii/WhatYouShouldntWorryAboutIn2026`
 - Local checkout path: repository root
 - Default branch: `main`
 - Project notes: keep local development notes outside this repository

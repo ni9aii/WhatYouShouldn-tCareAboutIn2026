@@ -5,9 +5,9 @@
 
 use std::io;
 
-use what_you_shouldnt_care_about_in_2026::input::{InputCommand, InputSource};
-use what_you_shouldnt_care_about_in_2026::segments::{Segment, SegmentOutcome};
-use what_you_shouldnt_care_about_in_2026::state::GameState;
+use what_you_shouldnt_worry_about_in_2026::input::{InputCommand, InputSource, ReadOutcome};
+use what_you_shouldnt_worry_about_in_2026::segments::{Segment, SegmentOutcome};
+use what_you_shouldnt_worry_about_in_2026::state::GameState;
 
 /// A deterministic source of commands used to drive segment logic in tests.
 struct ScriptedInput {
@@ -120,25 +120,31 @@ fn segment_ids_and_titles_are_stable() {
 
 #[test]
 fn read_yes_no_requires_confirm_to_resolve() {
-    use what_you_shouldnt_care_about_in_2026::segments::read_yes_no;
+    use what_you_shouldnt_worry_about_in_2026::segments::read_yes_no;
 
     let mut yes = ScriptedInput::new(&[InputCommand::Character('y'), InputCommand::Confirm]);
-    assert_eq!(read_yes_no(&mut yes).unwrap(), Some(true));
+    assert_eq!(read_yes_no(&mut yes).unwrap(), ReadOutcome::Value(true));
 
     let mut no = ScriptedInput::new(&[InputCommand::Character('n'), InputCommand::Confirm]);
-    assert_eq!(read_yes_no(&mut no).unwrap(), Some(false));
+    assert_eq!(read_yes_no(&mut no).unwrap(), ReadOutcome::Value(false));
 
     let mut quit = ScriptedInput::new(&[InputCommand::Quit]);
-    assert_eq!(read_yes_no(&mut quit).unwrap(), None);
+    assert_eq!(read_yes_no(&mut quit).unwrap(), ReadOutcome::Quit);
 }
 
 #[test]
-fn read_numeric_returns_value_or_none() {
-    use what_you_shouldnt_care_about_in_2026::segments::read_numeric;
+fn read_numeric_returns_value_or_cancel() {
+    use what_you_shouldnt_worry_about_in_2026::segments::read_numeric;
 
     let mut src = ScriptedInput::new(&[InputCommand::Character('5'), InputCommand::Confirm]);
-    assert_eq!(read_numeric(&mut src, "Floor: ").unwrap(), Some(5));
+    assert_eq!(
+        read_numeric(&mut src, "Floor: ").unwrap(),
+        ReadOutcome::Value(5)
+    );
 
     let mut cancel = ScriptedInput::new(&[InputCommand::Cancel]);
-    assert_eq!(read_numeric(&mut cancel, "Floor: ").unwrap(), None);
+    assert_eq!(
+        read_numeric(&mut cancel, "Floor: ").unwrap(),
+        ReadOutcome::Cancel
+    );
 }

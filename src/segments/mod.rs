@@ -1,6 +1,6 @@
 use std::io;
 
-use crate::input::{InputCommand, InputSource};
+use crate::input::{InputCommand, InputSource, ReadOutcome};
 use crate::state::GameState;
 
 pub mod elevator;
@@ -14,6 +14,8 @@ pub enum SegmentOutcome {
     Completed,
     /// The player cancelled (Esc) and returned to the menu; progress is kept.
     Cancelled,
+    /// The player quit the game from inside the segment.
+    Quit,
 }
 
 /// A mini-game that mutates the shared `GameState` through abstract input.
@@ -39,25 +41,25 @@ pub trait Segment {
 
 /// Convenience helper for segments: read a yes/no decision with Enter confirm.
 ///
-/// Returns `None` when the player cancels (Esc) or quits (q), so the caller can
-/// abort the segment cleanly.
-pub fn read_yes_no(input: &mut dyn InputSource) -> io::Result<Option<bool>> {
+/// Returns a distinct cancel or quit outcome so callers can preserve atomic
+/// segment behavior and terminate the session when requested.
+pub fn read_yes_no(input: &mut dyn InputSource) -> io::Result<ReadOutcome<bool>> {
     use crate::input::Choice;
     match crate::input::prompt_choice(input)? {
-        Choice::Confirmed => Ok(Some(true)),
-        Choice::Cancelled => Ok(Some(false)),
-        Choice::Quit => Ok(None),
+        Choice::Selected(value) => Ok(ReadOutcome::Value(value)),
+        Choice::Cancelled => Ok(ReadOutcome::Cancel),
+        Choice::Quit => Ok(ReadOutcome::Quit),
     }
 }
 
 /// Convenience helper for segments: read a numeric choice (e.g. floor).
 ///
-/// Returns `None` when the player cancels (Esc) or quits (q).
-pub fn read_numeric(input: &mut dyn InputSource, prompt: &str) -> io::Result<Option<u32>> {
-    use crate::input::ReadOutcome;
+/// Returns a distinct cancel or quit outcome.
+pub fn read_numeric(input: &mut dyn InputSource, prompt: &str) -> io::Result<ReadOutcome<u32>> {
     match crate::input::read_number(input, prompt)? {
-        ReadOutcome::Value(value) => Ok(Some(value)),
-        ReadOutcome::Cancel | ReadOutcome::Quit => Ok(None),
+        ReadOutcome::Value(value) => Ok(ReadOutcome::Value(value)),
+        ReadOutcome::Cancel => Ok(ReadOutcome::Cancel),
+        ReadOutcome::Quit => Ok(ReadOutcome::Quit),
     }
 }
 

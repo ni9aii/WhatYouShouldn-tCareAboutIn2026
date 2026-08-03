@@ -2,10 +2,10 @@
 
 use std::io;
 
-use what_you_shouldnt_care_about_in_2026::input::{InputCommand, InputSource};
-use what_you_shouldnt_care_about_in_2026::segments::radio::RadioSegment;
-use what_you_shouldnt_care_about_in_2026::segments::Segment;
-use what_you_shouldnt_care_about_in_2026::state::GameState;
+use what_you_shouldnt_worry_about_in_2026::input::{InputCommand, InputSource};
+use what_you_shouldnt_worry_about_in_2026::segments::radio::RadioSegment;
+use what_you_shouldnt_worry_about_in_2026::segments::Segment;
+use what_you_shouldnt_worry_about_in_2026::state::GameState;
 
 struct ScriptedInput {
     commands: Vec<InputCommand>,

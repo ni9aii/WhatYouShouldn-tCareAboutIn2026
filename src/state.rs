@@ -71,7 +71,7 @@ impl PlayerAspects {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GameState {
     pub profile: PlayerAspects,
     completed: BTreeSet<String>,
@@ -116,6 +116,10 @@ impl GameState {
 
     pub fn complete_segment(&mut self, id: &str) {
         self.completed.insert(id.to_owned());
+    }
+
+    pub fn is_segment_completed(&self, id: &str) -> bool {
+        self.completed.contains(id)
     }
 
     pub fn can_show_verdict(&self) -> bool {

@@ -3,10 +3,10 @@
 
 use std::io;
 
-use what_you_shouldnt_care_about_in_2026::input::{InputCommand, InputSource};
-use what_you_shouldnt_care_about_in_2026::oracle;
-use what_you_shouldnt_care_about_in_2026::segments::{Segment, SegmentOutcome};
-use what_you_shouldnt_care_about_in_2026::state::GameState;
+use what_you_shouldnt_worry_about_in_2026::input::{InputCommand, InputSource};
+use what_you_shouldnt_worry_about_in_2026::oracle;
+use what_you_shouldnt_worry_about_in_2026::segments::{Segment, SegmentOutcome};
+use what_you_shouldnt_worry_about_in_2026::state::GameState;
 
 struct ScriptedInput {
     commands: Vec<InputCommand>,
@@ -62,7 +62,7 @@ fn all_segments_complete_and_unlock_verdict() {
     let mut state = GameState::default();
     assert!(!state.can_show_verdict());
 
-    let mut segments = what_you_shouldnt_care_about_in_2026::segments::all_segments();
+    let mut segments = what_you_shouldnt_worry_about_in_2026::segments::all_segments();
     let mut input = ScriptedInput::new(&playthrough());
 
     for segment in segments.iter_mut() {
@@ -81,7 +81,7 @@ fn all_segments_complete_and_unlock_verdict() {
 #[test]
 fn replaying_a_completed_segment_does_not_double_count() {
     let mut state = GameState::default();
-    let mut segments = what_you_shouldnt_care_about_in_2026::segments::all_segments();
+    let mut segments = what_you_shouldnt_worry_about_in_2026::segments::all_segments();
     let mut input = ScriptedInput::new(&playthrough());
 
     for segment in segments.iter_mut() {
@@ -89,12 +89,15 @@ fn replaying_a_completed_segment_does_not_double_count() {
     }
     let first_count = state.completed_segments();
 
-    // Run the elevator again with a cancel; completion set must be unchanged.
-    let mut elevator = what_you_shouldnt_care_about_in_2026::segments::elevator::ElevatorSegment;
-    let mut cancel = ScriptedInput::new(&[InputCommand::Cancel]);
-    let outcome = elevator.run(&mut state, &mut cancel).unwrap();
-    assert_eq!(outcome, SegmentOutcome::Cancelled);
+    // Running the elevator again must not consume input or award its profile
+    // changes a second time.
+    let mut elevator = what_you_shouldnt_worry_about_in_2026::segments::elevator::ElevatorSegment;
+    let profile_before = state.profile.clone();
+    let mut no_input = ScriptedInput::new(&[]);
+    let outcome = elevator.run(&mut state, &mut no_input).unwrap();
+    assert_eq!(outcome, SegmentOutcome::Completed);
     assert_eq!(state.completed_segments(), first_count);
+    assert_eq!(state.profile, profile_before);
 }
 
 /// Two games started from the same seed and driven by the same inputs must
@@ -103,7 +106,7 @@ fn replaying_a_completed_segment_does_not_double_count() {
 fn same_seed_yields_identical_playthrough() {
     fn run() -> (GameState, String) {
         let mut state = GameState::with_seed(42);
-        let mut segments = what_you_shouldnt_care_about_in_2026::segments::all_segments();
+        let mut segments = what_you_shouldnt_worry_about_in_2026::segments::all_segments();
         let mut input = ScriptedInput::new(&playthrough());
         for segment in segments.iter_mut() {
             let _ = segment.run(&mut state, &mut input).unwrap();

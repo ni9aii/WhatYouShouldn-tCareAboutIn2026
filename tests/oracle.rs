@@ -1,5 +1,5 @@
-use what_you_shouldnt_care_about_in_2026::oracle::{self, Axis};
-use what_you_shouldnt_care_about_in_2026::state::PlayerAspects;
+use what_you_shouldnt_worry_about_in_2026::oracle::{self, Axis};
+use what_you_shouldnt_worry_about_in_2026::state::PlayerAspects;
 
 fn profile_with(mut f: impl FnMut(&mut PlayerAspects)) -> PlayerAspects {
     let mut p = PlayerAspects::default();

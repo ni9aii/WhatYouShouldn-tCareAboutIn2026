@@ -1,5 +1,5 @@
 use crossterm::event::{KeyCode, KeyEvent};
-use what_you_shouldnt_care_about_in_2026::input::{
+use what_you_shouldnt_worry_about_in_2026::input::{
     InputCommand, parse_floor_input, parse_yes_no_input,
 };
 

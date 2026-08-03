@@ -36,8 +36,9 @@ Keyboard controls:
 - Title screen: `Enter` starts the session. `q` or `Esc` quits.
 - Floor input: type digits, `Enter` confirms, `Backspace` erases, `Esc`
   returns to the menu, `q` quits.
-- Yes/No prompts: `y`/`Y` yes, `n`/`N`/`Enter` no, `Esc` returns to the menu,
-  `q` quits.
+- Yes/No prompts: `y`/`Y` selects yes, `n`/`N` selects no, then `Enter`
+  confirms the choice. `Enter` alone confirms no. `Esc` returns to the menu,
+  `q` quits. Selections are not applied until you press `Enter`.
 - After the verdict: `r` replays, `Enter`/`q`/`Esc` quits.
 
 `Esc` returns to the menu without losing the current run. `q` always quits the

@@ -10,7 +10,7 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 use what_you_shouldnt_care_about_in_2026::{
-    input::{self, InputCommand, InputSource, TerminalInput},
+    input::{self, Choice, InputCommand, InputSource, TerminalInput},
     oracle,
     state::GameState,
 };
@@ -26,67 +26,56 @@ enum ReadOutcome<T> {
     Quit,
 }
 
-struct TerminalGuard;
-
-impl TerminalGuard {
-    fn enter() -> io::Result<Self> {
-        enable_raw_mode()?;
-        execute!(stdout(), EnterAlternateScreen)?;
-        Ok(Self)
-    }
-}
-
-impl Drop for TerminalGuard {
-    fn drop(&mut self) {
-        let _ = disable_raw_mode();
-        let _ = execute!(stdout(), LeaveAlternateScreen);
-    }
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if !stdout().is_terminal() {
         return run_non_interactive_demo();
     }
 
-    let _guard = TerminalGuard::enter()?;
-    let backend = CrosstermBackend::new(stdout());
-    let mut terminal = Terminal::new(backend)?;
+    let mut input = TerminalInput;
 
     loop {
-        terminal.draw(|frame| {
-            let area = frame.area();
-            let text = ratatui::widgets::Paragraph::new(
-                "WHAT YOU SHOULDN'T CARE ABOUT IN 2026\n\nMVP-1 vertical slice\n\nPress Enter to start the elevator segment. Press Esc or q to quit.",
-            )
-            .block(ratatui::widgets::Block::bordered().title("Aura 2026"));
-            frame.render_widget(text, area);
-        })?;
-
-        match wait_for_start()? {
-            StartOutcome::Start => {}
-            StartOutcome::Quit => break,
+        // Enter the alternate screen only for the title screen, which is drawn
+        // through ratatui. The gameplay section below writes plain text, so we
+        // leave the alternate screen before it to avoid mixing ratatui's buffer
+        // management with raw `print!` output (which previously crashed on replay).
+        enable_raw_mode()?;
+        execute!(stdout(), EnterAlternateScreen)?;
+        {
+            let backend = CrosstermBackend::new(stdout());
+            let mut terminal = Terminal::new(backend)?;
+            terminal.draw(|frame| {
+                let area = frame.area();
+                let text = ratatui::widgets::Paragraph::new(
+                    "WHAT YOU SHOULDN'T CARE ABOUT IN 2026\n\nMVP-1 vertical slice\n\nPress Enter to start the elevator segment. Press Esc or q to quit.",
+                )
+                .block(ratatui::widgets::Block::bordered().title("Aura 2026"));
+                frame.render_widget(text, area);
+            })?;
         }
-
-        disable_raw_mode()?;
         execute!(
             stdout(),
             LeaveAlternateScreen,
             Clear(ClearType::All),
             MoveTo(0, 0)
         )?;
-        enable_raw_mode()?;
+
+        match wait_for_start(&mut input)? {
+            StartOutcome::Start => {}
+            StartOutcome::Quit => break,
+        }
 
         let mut state = GameState::default();
-        let mut input = TerminalInput;
         match play_session(&mut state, &mut input)? {
             SessionOutcome::Replay => {}
             SessionOutcome::Quit => break,
         }
 
-        match wait_for_replay()? {
+        match wait_for_replay(&mut input)? {
             ReplayOutcome::Replay => {}
             ReplayOutcome::Quit => break,
         }
+
+        disable_raw_mode()?;
     }
 
     disable_raw_mode()?;
@@ -98,18 +87,18 @@ enum StartOutcome {
     Quit,
 }
 
-fn wait_for_start() -> io::Result<StartOutcome> {
-    let mut input = TerminalInput;
-    loop {
+fn wait_for_start(input: &mut dyn InputSource) -> io::Result<StartOutcome> {
+    let outcome = loop {
         match input.read_command()? {
-            InputCommand::Confirm => return Ok(StartOutcome::Start),
-            InputCommand::Quit => return Ok(StartOutcome::Quit),
+            InputCommand::Confirm => break StartOutcome::Start,
+            InputCommand::Quit => break StartOutcome::Quit,
             // Esc quits from the start screen: there is no progress to preserve
             // yet, and the spec requires Esc to drop back to a safe exit.
-            InputCommand::Cancel => return Ok(StartOutcome::Quit),
+            InputCommand::Cancel => break StartOutcome::Quit,
             _ => {}
         }
-    }
+    };
+    Ok(outcome)
 }
 
 enum SessionOutcome {
@@ -119,7 +108,7 @@ enum SessionOutcome {
 
 fn play_session(state: &mut GameState, input: &mut dyn InputSource) -> io::Result<SessionOutcome> {
     print!(
-        "ELEVATOR SEGMENT\r\n\r\nChoose a floor from 1 to 100.\r\nPress Enter after typing the floor, Esc to return to the menu, or q to quit.\r\n"
+        "ELEVATOR SEGMENT\r\n\r\nChoose a floor from 1 to 100.\r\nType digits, then press Enter to confirm, Esc to return to the menu, or q to quit.\r\n"
     );
     stdout().flush()?;
 
@@ -130,7 +119,7 @@ fn play_session(state: &mut GameState, input: &mut dyn InputSource) -> io::Resul
     };
     let panic = match read_yes_no(
         input,
-        "\r\nThe elevator shudders between floors. Panic? [y/N]: ",
+        "\r\nThe elevator shudders between floors. Panic? (y/n, then Enter): ",
     )? {
         ReadOutcome::Value(panic) => panic,
         ReadOutcome::Cancel => return Ok(SessionOutcome::Replay),
@@ -140,7 +129,10 @@ fn play_session(state: &mut GameState, input: &mut dyn InputSource) -> io::Resul
     state.complete_segment("elevator");
     print!("\r\n{feedback}\r\n");
 
-    let listen = match read_yes_no(input, "\r\nThe radio starts broadcasting. Listen? [y/N]: ")? {
+    let listen = match read_yes_no(
+        input,
+        "\r\nThe radio starts broadcasting. Listen? (y/n, then Enter): ",
+    )? {
         ReadOutcome::Value(listen) => listen,
         ReadOutcome::Cancel => return Ok(SessionOutcome::Replay),
         ReadOutcome::Quit => return Ok(SessionOutcome::Quit),
@@ -151,7 +143,7 @@ fn play_session(state: &mut GameState, input: &mut dyn InputSource) -> io::Resul
 
     let look = match read_yes_no(
         input,
-        "\r\nA mirror appears in the corridor. Look into it? [y/N]: ",
+        "\r\nA mirror appears in the corridor. Look into it? (y/n, then Enter): ",
     )? {
         ReadOutcome::Value(look) => look,
         ReadOutcome::Cancel => return Ok(SessionOutcome::Replay),
@@ -183,20 +175,20 @@ enum ReplayOutcome {
     Quit,
 }
 
-fn wait_for_replay() -> io::Result<ReplayOutcome> {
+fn wait_for_replay(input: &mut dyn InputSource) -> io::Result<ReplayOutcome> {
     print!("\r\nPress r to play again, Enter or q to quit.\r\n");
     stdout().flush()?;
-    let mut input = TerminalInput;
-    loop {
+    let outcome = loop {
         match input.read_command()? {
             InputCommand::Character('r') | InputCommand::Character('R') => {
-                return Ok(ReplayOutcome::Replay);
+                break ReplayOutcome::Replay;
             }
-            InputCommand::Confirm | InputCommand::Quit => return Ok(ReplayOutcome::Quit),
-            InputCommand::Cancel => return Ok(ReplayOutcome::Quit),
+            InputCommand::Confirm | InputCommand::Quit => break ReplayOutcome::Quit,
+            InputCommand::Cancel => break ReplayOutcome::Quit,
             _ => {}
         }
-    }
+    };
+    Ok(outcome)
 }
 
 fn read_number(input: &mut dyn InputSource, prompt: &str) -> io::Result<ReadOutcome<u32>> {
@@ -220,9 +212,9 @@ fn read_number(input: &mut dyn InputSource, prompt: &str) -> io::Result<ReadOutc
                 Ok(Some(value)) => {
                     print!("\r\n");
                     stdout().flush()?;
-                    return Ok(ReadOutcome::Value(value));
+                    break Ok(ReadOutcome::Value(value));
                 }
-                Ok(None) => return Ok(ReadOutcome::Quit),
+                Ok(None) => break Ok(ReadOutcome::Quit),
                 Err(_) => {
                     print!("\r\nPlease enter a number from 1 to 100.\r\n");
                     buffer.clear();
@@ -230,8 +222,8 @@ fn read_number(input: &mut dyn InputSource, prompt: &str) -> io::Result<ReadOutc
                     stdout().flush()?;
                 }
             },
-            InputCommand::Cancel => return Ok(ReadOutcome::Cancel),
-            InputCommand::Quit => return Ok(ReadOutcome::Quit),
+            InputCommand::Cancel => break Ok(ReadOutcome::Cancel),
+            InputCommand::Quit => break Ok(ReadOutcome::Quit),
             _ => {}
         }
     }
@@ -240,22 +232,18 @@ fn read_number(input: &mut dyn InputSource, prompt: &str) -> io::Result<ReadOutc
 fn read_yes_no(input: &mut dyn InputSource, prompt: &str) -> io::Result<ReadOutcome<bool>> {
     print!("{prompt}");
     stdout().flush()?;
-    loop {
-        match input.read_command()? {
-            InputCommand::Character('y') | InputCommand::Character('Y') => {
-                print!("\r\ny\r\n");
-                stdout().flush()?;
-                return Ok(ReadOutcome::Value(true));
-            }
-            InputCommand::Character('n') | InputCommand::Character('N') | InputCommand::Confirm => {
-                print!("\r\nn\r\n");
-                stdout().flush()?;
-                return Ok(ReadOutcome::Value(false));
-            }
-            InputCommand::Cancel => return Ok(ReadOutcome::Cancel),
-            InputCommand::Quit => return Ok(ReadOutcome::Quit),
-            _ => {}
+    match input::prompt_choice(input)? {
+        Choice::Confirmed => {
+            print!("\r\ny\r\n");
+            stdout().flush()?;
+            Ok(ReadOutcome::Value(true))
         }
+        Choice::Cancelled => {
+            print!("\r\nn\r\n");
+            stdout().flush()?;
+            Ok(ReadOutcome::Value(false))
+        }
+        Choice::Quit => Ok(ReadOutcome::Quit),
     }
 }
 

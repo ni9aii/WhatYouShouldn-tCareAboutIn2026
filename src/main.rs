@@ -2,7 +2,6 @@ use std::io::{self, IsTerminal, Write, stdout};
 
 use crossterm::{
     cursor::MoveTo,
-    event::{self, Event, KeyCode},
     execute,
     terminal::{
         Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode,
@@ -10,7 +9,22 @@ use crossterm::{
     },
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
-use what_you_shouldnt_care_about_in_2026::{input, oracle, state::GameState};
+use what_you_shouldnt_care_about_in_2026::{
+    input::{self, InputCommand, InputSource, TerminalInput},
+    oracle,
+    state::GameState,
+};
+
+/// Outcome of an interactive prompt.
+///
+/// `Value` carries the parsed result. `Cancel` means the player pressed Esc and
+/// wants to return to the menu without losing progress. `Quit` means the player
+/// asked to leave the game entirely (q / EOF).
+enum ReadOutcome<T> {
+    Value(T),
+    Cancel,
+    Quit,
+}
 
 struct TerminalGuard;
 
@@ -39,18 +53,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     loop {
-        execute!(stdout(), EnterAlternateScreen)?;
         terminal.draw(|frame| {
             let area = frame.area();
             let text = ratatui::widgets::Paragraph::new(
-                "WHAT YOU SHOULDN'T CARE ABOUT IN 2026\n\nMVP-1 vertical slice\n\nPress Enter to start the elevator segment. Press q to quit.",
+                "WHAT YOU SHOULDN'T CARE ABOUT IN 2026\n\nMVP-1 vertical slice\n\nPress Enter to start the elevator segment. Press Esc or q to quit.",
             )
             .block(ratatui::widgets::Block::bordered().title("Aura 2026"));
             frame.render_widget(text, area);
         })?;
 
-        if !wait_for_start()? {
-            break;
+        match wait_for_start()? {
+            StartOutcome::Start => {}
+            StartOutcome::Quit => break,
         }
 
         disable_raw_mode()?;
@@ -61,13 +75,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             MoveTo(0, 0)
         )?;
         enable_raw_mode()?;
+
         let mut state = GameState::default();
-        if !play_session(&mut state, &mut terminal)? {
-            break;
+        let mut input = TerminalInput;
+        match play_session(&mut state, &mut input)? {
+            SessionOutcome::Replay => {}
+            SessionOutcome::Quit => break,
         }
 
-        if !wait_for_replay()? {
-            break;
+        match wait_for_replay()? {
+            ReplayOutcome::Replay => {}
+            ReplayOutcome::Quit => break,
         }
     }
 
@@ -75,50 +93,69 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn wait_for_start() -> io::Result<bool> {
+enum StartOutcome {
+    Start,
+    Quit,
+}
+
+fn wait_for_start() -> io::Result<StartOutcome> {
+    let mut input = TerminalInput;
     loop {
-        if let Event::Key(key) = event::read()? {
-            match key.code {
-                KeyCode::Enter => return Ok(true),
-                KeyCode::Char('q') | KeyCode::Char('Q') => return Ok(false),
-                _ => {}
-            }
+        match input.read_command()? {
+            InputCommand::Confirm => return Ok(StartOutcome::Start),
+            InputCommand::Quit => return Ok(StartOutcome::Quit),
+            // Esc quits from the start screen: there is no progress to preserve
+            // yet, and the spec requires Esc to drop back to a safe exit.
+            InputCommand::Cancel => return Ok(StartOutcome::Quit),
+            _ => {}
         }
     }
 }
 
-fn play_session(
-    state: &mut GameState,
-    _terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
-) -> Result<bool, Box<dyn std::error::Error>> {
+enum SessionOutcome {
+    Replay,
+    Quit,
+}
+
+fn play_session(state: &mut GameState, input: &mut dyn InputSource) -> io::Result<SessionOutcome> {
     print!(
-        "ELEVATOR SEGMENT\r\n\r\nChoose a floor from 1 to 100.\r\nPress Enter after typing the floor, or q to quit.\r\n"
+        "ELEVATOR SEGMENT\r\n\r\nChoose a floor from 1 to 100.\r\nPress Enter after typing the floor, Esc to return to the menu, or q to quit.\r\n"
     );
     stdout().flush()?;
 
-    let floor = match read_number("Elevator is waiting. Type a floor (1-100), or q to quit: ")? {
-        Some(floor) => floor,
-        None => return Ok(false),
+    let floor = match read_number(input, "Elevator is waiting. Type a floor (1-100): ")? {
+        ReadOutcome::Value(floor) => floor,
+        ReadOutcome::Cancel => return Ok(SessionOutcome::Replay),
+        ReadOutcome::Quit => return Ok(SessionOutcome::Quit),
     };
-    let panic = match read_yes_no("\r\nThe elevator shudders between floors. Panic? [y/N]: ")? {
-        Some(panic) => panic,
-        None => return Ok(false),
+    let panic = match read_yes_no(
+        input,
+        "\r\nThe elevator shudders between floors. Panic? [y/N]: ",
+    )? {
+        ReadOutcome::Value(panic) => panic,
+        ReadOutcome::Cancel => return Ok(SessionOutcome::Replay),
+        ReadOutcome::Quit => return Ok(SessionOutcome::Quit),
     };
     let feedback = state.apply_elevator_decision(floor, panic);
     state.complete_segment("elevator");
     print!("\r\n{feedback}\r\n");
 
-    let listen = match read_yes_no("\r\nThe radio starts broadcasting. Listen? [y/N]: ")? {
-        Some(listen) => listen,
-        None => return Ok(false),
+    let listen = match read_yes_no(input, "\r\nThe radio starts broadcasting. Listen? [y/N]: ")? {
+        ReadOutcome::Value(listen) => listen,
+        ReadOutcome::Cancel => return Ok(SessionOutcome::Replay),
+        ReadOutcome::Quit => return Ok(SessionOutcome::Quit),
     };
     let feedback = state.apply_radio_decision(listen);
     state.complete_segment("radio");
     print!("\r\n{feedback}\r\n");
 
-    let look = match read_yes_no("\r\nA mirror appears in the corridor. Look into it? [y/N]: ")? {
-        Some(look) => look,
-        None => return Ok(false),
+    let look = match read_yes_no(
+        input,
+        "\r\nA mirror appears in the corridor. Look into it? [y/N]: ",
+    )? {
+        ReadOutcome::Value(look) => look,
+        ReadOutcome::Cancel => return Ok(SessionOutcome::Replay),
+        ReadOutcome::Quit => return Ok(SessionOutcome::Quit),
     };
     let feedback = state.apply_mirror_decision(look);
     state.complete_segment("mirror");
@@ -134,85 +171,90 @@ fn play_session(
     };
     print!("\r\n{}\r\n", normalize_terminal_text(&verdict));
     stdout().flush()?;
-    Ok(true)
+    Ok(SessionOutcome::Replay)
 }
 
 fn normalize_terminal_text(text: &str) -> String {
-    text.replace("\r\n", "\n").replace('\n', "\r\n")
+    text.replace('\r', "").replace('\n', "\r\n")
 }
 
-fn wait_for_replay() -> io::Result<bool> {
+enum ReplayOutcome {
+    Replay,
+    Quit,
+}
+
+fn wait_for_replay() -> io::Result<ReplayOutcome> {
     print!("\r\nPress r to play again, Enter or q to quit.\r\n");
     stdout().flush()?;
+    let mut input = TerminalInput;
     loop {
-        if let Event::Key(key) = event::read()? {
-            match key.code {
-                KeyCode::Char('r') | KeyCode::Char('R') => return Ok(true),
-                KeyCode::Enter | KeyCode::Char('q') | KeyCode::Char('Q') => return Ok(false),
-                _ => {}
+        match input.read_command()? {
+            InputCommand::Character('r') | InputCommand::Character('R') => {
+                return Ok(ReplayOutcome::Replay);
             }
+            InputCommand::Confirm | InputCommand::Quit => return Ok(ReplayOutcome::Quit),
+            InputCommand::Cancel => return Ok(ReplayOutcome::Quit),
+            _ => {}
         }
     }
 }
 
-fn read_number(prompt: &str) -> io::Result<Option<u32>> {
-    let mut input = String::new();
+fn read_number(input: &mut dyn InputSource, prompt: &str) -> io::Result<ReadOutcome<u32>> {
+    let mut buffer = String::new();
     print!("{prompt}");
     stdout().flush()?;
     loop {
-        if let Event::Key(key) = event::read()? {
-            match key.code {
-                KeyCode::Char('q') | KeyCode::Char('Q') if input.is_empty() => return Ok(None),
-                KeyCode::Char(character) if character.is_ascii_digit() => {
-                    input.push(character);
-                    print!("{character}");
+        match input.read_command()? {
+            InputCommand::Character(character) if character.is_ascii_digit() => {
+                buffer.push(character);
+                print!("{character}");
+                stdout().flush()?;
+            }
+            InputCommand::Backspace => {
+                if buffer.pop().is_some() {
+                    print!("\u{8} \u{8}");
                     stdout().flush()?;
                 }
-                KeyCode::Backspace => {
-                    if input.pop().is_some() {
-                        print!("\u{8} \u{8}");
-                        stdout().flush()?;
-                    }
+            }
+            InputCommand::Confirm => match input::parse_floor_input(&buffer) {
+                Ok(Some(value)) => {
+                    print!("\r\n");
+                    stdout().flush()?;
+                    return Ok(ReadOutcome::Value(value));
                 }
-                KeyCode::Enter => {
-                    if let Ok(Some(value)) = input::parse_floor_input(&input) {
-                        print!("\r\n");
-                        stdout().flush()?;
-                        return Ok(Some(value));
-                    }
-                    if input::parse_floor_input(&input) == Ok(None) {
-                        return Ok(None);
-                    }
-                    print!("\r\nPlease enter a number from 1 to 100, or q to quit.\r\n");
-                    input.clear();
+                Ok(None) => return Ok(ReadOutcome::Quit),
+                Err(_) => {
+                    print!("\r\nPlease enter a number from 1 to 100.\r\n");
+                    buffer.clear();
                     print!("{prompt}");
                     stdout().flush()?;
                 }
-                _ => {}
-            }
+            },
+            InputCommand::Cancel => return Ok(ReadOutcome::Cancel),
+            InputCommand::Quit => return Ok(ReadOutcome::Quit),
+            _ => {}
         }
     }
 }
 
-fn read_yes_no(prompt: &str) -> io::Result<Option<bool>> {
+fn read_yes_no(input: &mut dyn InputSource, prompt: &str) -> io::Result<ReadOutcome<bool>> {
     print!("{prompt}");
     stdout().flush()?;
     loop {
-        if let Event::Key(key) = event::read()? {
-            match key.code {
-                KeyCode::Char('y') | KeyCode::Char('Y') => {
-                    print!("\r\ny\r\n");
-                    stdout().flush()?;
-                    return Ok(Some(true));
-                }
-                KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Enter => {
-                    print!("\r\nn\r\n");
-                    stdout().flush()?;
-                    return Ok(Some(false));
-                }
-                KeyCode::Char('q') | KeyCode::Char('Q') => return Ok(None),
-                _ => {}
+        match input.read_command()? {
+            InputCommand::Character('y') | InputCommand::Character('Y') => {
+                print!("\r\ny\r\n");
+                stdout().flush()?;
+                return Ok(ReadOutcome::Value(true));
             }
+            InputCommand::Character('n') | InputCommand::Character('N') | InputCommand::Confirm => {
+                print!("\r\nn\r\n");
+                stdout().flush()?;
+                return Ok(ReadOutcome::Value(false));
+            }
+            InputCommand::Cancel => return Ok(ReadOutcome::Cancel),
+            InputCommand::Quit => return Ok(ReadOutcome::Quit),
+            _ => {}
         }
     }
 }

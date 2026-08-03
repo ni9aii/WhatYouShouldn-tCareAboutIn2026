@@ -127,6 +127,67 @@ impl GameState {
     }
 }
 
+/// Event category that can occur on an elevator floor, per the TZ.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ElevatorEventCategory {
+    Mystical,
+    Social,
+    Global,
+}
+
+impl ElevatorEventCategory {
+    /// Pick a deterministic event category from a chosen floor (1..=100).
+    ///
+    /// High floors read as geopolitical, mid floors as social, low floors as
+    /// esoteric. The mapping is fixed so tests stay reproducible.
+    pub fn from_floor(floor: u32) -> Self {
+        if floor >= 70 {
+            Self::Global
+        } else if floor >= 40 {
+            Self::Social
+        } else {
+            Self::Mystical
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Mystical => "mystical",
+            Self::Social => "social",
+            Self::Global => "global",
+        }
+    }
+}
+
+impl GameState {
+    pub fn apply_elevator_event(
+        &mut self,
+        category: ElevatorEventCategory,
+        engage: bool,
+    ) -> String {
+        if !engage {
+            return "You ignore the floor's event. The doors close on an unremarkable moment."
+                .to_owned();
+        }
+        match category {
+            ElevatorEventCategory::Mystical => {
+                self.profile.adjust_esoteric(6);
+                "A mystical event unfolds: the elevator hums a tune older than the building."
+                    .to_owned()
+            }
+            ElevatorEventCategory::Social => {
+                self.profile.adjust_social(6);
+                "A social event unfolds: a neighbour nods, and you are briefly legible to society."
+                    .to_owned()
+            }
+            ElevatorEventCategory::Global => {
+                self.profile.adjust_geopolitical(6);
+                "A global event unfolds: the rooftop broadcast declares a crisis that will not involve you.".to_owned()
+            }
+        }
+    }
+}
+
 fn clamp(value: u32, delta: i32) -> u32 {
     (value as i64 + delta as i64).clamp(0, 100) as u32
 }

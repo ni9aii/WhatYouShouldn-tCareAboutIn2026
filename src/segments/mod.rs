@@ -3,6 +3,8 @@ use std::io;
 use crate::input::{InputCommand, InputSource};
 use crate::state::GameState;
 
+pub mod elevator;
+
 /// Result of running a segment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SegmentOutcome {

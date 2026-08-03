@@ -10,9 +10,9 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 use what_you_shouldnt_care_about_in_2026::{
-    input::{self, InputCommand, InputSource, TerminalInput},
+    input::{InputCommand, InputSource, TerminalInput},
     oracle,
-    segments::SegmentOutcome,
+    segments::{self, SegmentOutcome},
     state::GameState,
     ui,
 };
@@ -59,7 +59,7 @@ fn play_session(state: &mut GameState, input: &mut dyn InputSource) -> io::Resul
             }
             MenuSelection::Verdict => {
                 show_verdict(state)?;
-                return Ok(handle_replay(input)?);
+                return handle_replay(input);
             }
             MenuSelection::Quit => return Ok(false),
         }

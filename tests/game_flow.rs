@@ -6,7 +6,7 @@ use std::io;
 use what_you_shouldnt_care_about_in_2026::input::{InputCommand, InputSource};
 use what_you_shouldnt_care_about_in_2026::oracle;
 use what_you_shouldnt_care_about_in_2026::segments::{Segment, SegmentOutcome};
-use what_you_shouldnt_care_about_in_2026::state::{GameState, VERDICT_SEGMENT_THRESHOLD};
+use what_you_shouldnt_care_about_in_2026::state::GameState;
 
 struct ScriptedInput {
     commands: Vec<InputCommand>,
@@ -72,7 +72,6 @@ fn all_segments_complete_and_unlock_verdict() {
 
     assert_eq!(state.completed_segments(), 3);
     assert!(state.can_show_verdict());
-    assert!(VERDICT_SEGMENT_THRESHOLD <= 3);
 
     let verdict = oracle::generate(&state.profile);
     assert!(!verdict.is_empty());

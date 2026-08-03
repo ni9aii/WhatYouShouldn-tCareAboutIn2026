@@ -1,6 +1,13 @@
 use std::collections::BTreeSet;
 
+use rand::SeedableRng;
+use rand::rngs::StdRng;
+
 pub const VERDICT_SEGMENT_THRESHOLD: usize = 3;
+
+/// Default seed used when no explicit seed is provided. Tests pass a fixed
+/// seed so runs stay reproducible.
+pub const DEFAULT_SEED: u64 = 0x2026_C0DE;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlayerAspects {
@@ -64,13 +71,40 @@ impl PlayerAspects {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct GameState {
     pub profile: PlayerAspects,
     completed: BTreeSet<String>,
+    pub seed: u64,
+}
+
+impl Default for GameState {
+    fn default() -> Self {
+        Self {
+            profile: PlayerAspects::default(),
+            completed: BTreeSet::new(),
+            seed: DEFAULT_SEED,
+        }
+    }
 }
 
 impl GameState {
+    /// Create a `GameState` with a fixed seed for reproducible runs.
+    pub fn with_seed(seed: u64) -> Self {
+        Self {
+            seed,
+            ..Default::default()
+        }
+    }
+
+    /// Build a deterministic RNG from the stored seed.
+    ///
+    /// Segments and the oracle use this for any randomness so that a fixed
+    /// seed yields identical behaviour in tests and replays.
+    pub fn rng(&self) -> StdRng {
+        StdRng::seed_from_u64(self.seed)
+    }
+
     pub fn completed_segments(&self) -> usize {
         self.completed.len()
     }

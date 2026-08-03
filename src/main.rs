@@ -33,6 +33,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _guard = TerminalGuard::enter()?;
     let backend = CrosstermBackend::new(stdout());
     let mut terminal = Terminal::new(backend)?;
+
     loop {
         execute!(stdout(), EnterAlternateScreen)?;
         terminal.draw(|frame| {
@@ -52,7 +53,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         execute!(stdout(), LeaveAlternateScreen)?;
         enable_raw_mode()?;
         let mut state = GameState::default();
-        play_session(&mut state, &mut terminal)?;
+        if !play_session(&mut state, &mut terminal)? {
+            break;
+        }
 
         if !wait_for_replay()? {
             break;
@@ -78,7 +81,7 @@ fn wait_for_start() -> io::Result<bool> {
 fn play_session(
     state: &mut GameState,
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<bool, Box<dyn std::error::Error>> {
     terminal.draw(|frame| {
         let area = frame.area();
         let text = ratatui::widgets::Paragraph::new(
@@ -90,11 +93,11 @@ fn play_session(
 
     let floor = match read_number("Elevator is waiting. Type a floor (1-100), or q to quit: ")? {
         Some(floor) => floor,
-        None => return Ok(()),
+        None => return Ok(false),
     };
     let panic = match read_yes_no("\r\nThe elevator shudders between floors. Panic? [y/N]: ")? {
         Some(panic) => panic,
-        None => return Ok(()),
+        None => return Ok(false),
     };
     let feedback = state.apply_elevator_decision(floor, panic);
     state.complete_segment("elevator");
@@ -102,7 +105,7 @@ fn play_session(
 
     let listen = match read_yes_no("\r\nThe radio starts broadcasting. Listen? [y/N]: ")? {
         Some(listen) => listen,
-        None => return Ok(()),
+        None => return Ok(false),
     };
     let feedback = state.apply_radio_decision(listen);
     state.complete_segment("radio");
@@ -110,7 +113,7 @@ fn play_session(
 
     let look = match read_yes_no("\r\nA mirror appears in the corridor. Look into it? [y/N]: ")? {
         Some(look) => look,
-        None => return Ok(()),
+        None => return Ok(false),
     };
     let feedback = state.apply_mirror_decision(look);
     state.complete_segment("mirror");
@@ -126,7 +129,7 @@ fn play_session(
     };
     print!("\r\n{verdict}\r\n");
     stdout().flush()?;
-    Ok(())
+    Ok(true)
 }
 
 fn wait_for_replay() -> io::Result<bool> {

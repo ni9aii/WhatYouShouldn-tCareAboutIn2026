@@ -4,6 +4,7 @@ use crate::input::{InputCommand, InputSource};
 use crate::state::GameState;
 
 pub mod elevator;
+pub mod mirror;
 pub mod radio;
 
 /// Result of running a segment.

@@ -78,6 +78,62 @@ pub fn parse_floor_input(input: &str) -> Result<Option<u32>, &'static str> {
         .map_err(|_| "floor must be a number from 1 to 100")
 }
 
+/// Outcome of an interactive prompt driven by an `InputSource`.
+///
+/// `Value` carries the parsed result; `Cancel` means the player pressed Esc and
+/// wants to return to the menu without losing progress; `Quit` means the player
+/// asked to leave the game entirely (q / EOF).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReadOutcome<T> {
+    Value(T),
+    Cancel,
+    Quit,
+}
+
+/// Read a numeric choice (floor, frequency, etc.) through an abstract source.
+///
+/// Accepts ASCII digits, `Enter` confirms the buffered number, `Backspace`
+/// erases the last digit, `Esc` cancels, and `q`/`Q` quits. Empty or invalid
+/// input is rejected with a retry prompt rather than accepted.
+pub fn read_number(source: &mut dyn InputSource, prompt: &str) -> io::Result<ReadOutcome<u32>> {
+    let mut buffer = String::new();
+    print!("{prompt}");
+    use std::io::Write;
+    std::io::stdout().flush()?;
+    loop {
+        match source.read_command()? {
+            InputCommand::Character(character) if character.is_ascii_digit() => {
+                buffer.push(character);
+                print!("{character}");
+                std::io::stdout().flush()?;
+            }
+            InputCommand::Backspace => {
+                if buffer.pop().is_some() {
+                    print!("\u{8} \u{8}");
+                    std::io::stdout().flush()?;
+                }
+            }
+            InputCommand::Confirm => match parse_floor_input(&buffer) {
+                Ok(Some(value)) => {
+                    print!("\r\n");
+                    std::io::stdout().flush()?;
+                    break Ok(ReadOutcome::Value(value));
+                }
+                Ok(None) => break Ok(ReadOutcome::Quit),
+                Err(_) => {
+                    print!("\r\nPlease enter a number from 1 to 100.\r\n");
+                    buffer.clear();
+                    print!("{prompt}");
+                    std::io::stdout().flush()?;
+                }
+            },
+            InputCommand::Cancel => break Ok(ReadOutcome::Cancel),
+            InputCommand::Quit => break Ok(ReadOutcome::Quit),
+            _ => {}
+        }
+    }
+}
+
 pub fn parse_yes_no_input(input: &str) -> Result<Option<bool>, &'static str> {
     match input.trim().to_ascii_lowercase().as_str() {
         "y" | "yes" => Ok(Some(true)),
